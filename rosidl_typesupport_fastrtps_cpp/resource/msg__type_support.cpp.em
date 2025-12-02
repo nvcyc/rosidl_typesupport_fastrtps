@@ -24,6 +24,7 @@ header_files = [
     'rosidl_typesupport_fastrtps_cpp/message_type_support_decl.hpp',
     'rosidl_typesupport_fastrtps_cpp/serialization_helpers.hpp',
     'rosidl_typesupport_fastrtps_cpp/wstring_conversion.hpp',
+    'rosidl_typesupport_fastrtps_cpp/buffer_serialization.hpp',
     'fastcdr/Cdr.h',
 ]
 }@
