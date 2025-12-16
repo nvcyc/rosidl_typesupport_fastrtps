@@ -75,4 +75,7 @@ inline bool cdr_deserialize(
 
 }  // namespace rosidl_typesupport_fastrtps_cpp
 
+// Include Buffer serialization support
+#include "rosidl_typesupport_fastrtps_cpp/buffer_serialization.hpp"
+
 #endif  // ROSIDL_TYPESUPPORT_FASTRTPS_CPP__SERIALIZATION_HELPERS_HPP_

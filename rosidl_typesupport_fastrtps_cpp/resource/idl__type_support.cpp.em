@@ -21,6 +21,8 @@ include_base = '/'.join(include_parts)
 #include "@(include_base)__functions.h"
 #include "@(include_base)__struct.hpp"
 
+#include "rosidl_typesupport_fastrtps_cpp/buffer_serialization.hpp"
+
 @{
 include_directives = set()
 forward_declared_types = set()

@@ -330,36 +330,11 @@ def generate_member_for_get_serialized_size(member, suffix):
   strlist.append('// Member: %s' % (member.name))
 
   if isinstance(member.type, AbstractNestedType):
-    strlist.append('{')
-    if isinstance(member.type, Array):
-      strlist.append('  size_t array_size = %d;' % (member.type.size))
-    else:
-      strlist.append('  size_t array_size = ros_message.%s.size();' % (member.name))
-      if isinstance(member.type, BoundedSequence):
-        strlist.append('  if (array_size > %d) {' % (member.type.maximum_size))
-        strlist.append('    throw std::runtime_error("array size exceeds upper bound");')
-        strlist.append('  }')
-      strlist.append('  current_alignment += padding +')
-      strlist.append('    eprosima::fastcdr::Cdr::alignment(current_alignment, padding);')
-    if isinstance(member.type.value_type, AbstractGenericString):
-      strlist.append('  for (size_t index = 0; index < array_size; ++index) {')
-      strlist.append('    current_alignment += padding +')
-      strlist.append('      eprosima::fastcdr::Cdr::alignment(current_alignment, padding) +')
-      if isinstance(member.type.value_type, AbstractWString):
-        strlist.append('      wchar_size *')
-      strlist.append('      (ros_message.%s[index].size() + 1);' % (member.name))
-      strlist.append('  }')
-    elif isinstance(member.type.value_type, BasicType):
-      strlist.append('  size_t item_size = sizeof(ros_message.%s[0]);' % (member.name))
-      strlist.append('  current_alignment += array_size * item_size +')
-      strlist.append('    eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);')
-    else:
-      strlist.append('  for (size_t index = 0; index < array_size; ++index) {')
-      strlist.append('    current_alignment +=')
-      strlist.append('      %s::typesupport_fastrtps_cpp::get_serialized_size%s(' % (('::'.join(member.type.value_type.namespaces)), suffix))
-      strlist.append('      ros_message.%s[index], current_alignment);' % (member.name))
-      strlist.append('  }')
-    strlist.append('}')
+    # AbstractNestedType (array/sequence) fields are now Buffer<T> in rosidl_generator_cpp
+    # Call the Buffer-specific serialization size function
+    strlist.append('current_alignment +=')
+    strlist.append('  rosidl_typesupport_fastrtps_cpp::get_buffer_serialized_size(')
+    strlist.append('  ros_message.%s, current_alignment);' % (member.name))
   else:
     if isinstance(member.type, AbstractGenericString):
       strlist.append('current_alignment += padding +')
