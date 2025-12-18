@@ -22,19 +22,6 @@ namespace eprosima
 namespace fastcdr
 {
 
-// Provide definitions for the declared templates
-template<typename T, typename Allocator>
-void serialize(Cdr & cdr, const rosidl_runtime_cpp::Buffer<T, Allocator> & buffer)
-{
-  cdr << buffer;  // Delegate to our custom operator<<
-}
-
-template<typename T, typename Allocator>
-void deserialize(Cdr & cdr, rosidl_runtime_cpp::Buffer<T, Allocator> & buffer)
-{
-  cdr >> buffer;  // Delegate to our custom operator>>
-}
-
 // Common numeric types - explicit instantiations
 template void serialize(Cdr & cdr, const rosidl_runtime_cpp::Buffer<uint8_t> & buffer);
 template void deserialize(Cdr & cdr, rosidl_runtime_cpp::Buffer<uint8_t> & buffer);
@@ -68,4 +55,3 @@ template void deserialize(Cdr & cdr, rosidl_runtime_cpp::Buffer<double> & buffer
 
 }  // namespace fastcdr
 }  // namespace eprosima
-
