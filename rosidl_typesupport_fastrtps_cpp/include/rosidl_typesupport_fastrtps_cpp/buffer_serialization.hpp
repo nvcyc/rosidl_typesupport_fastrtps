@@ -233,16 +233,22 @@ inline Cdr & operator>>(Cdr & cdr, rosidl_runtime_cpp::Buffer<T, Allocator> & bu
   std::string backend_type;
   cdr >> backend_type;
   
+  std::cerr << "[Buffer Deserialization] Deserializing Buffer with backend: " << backend_type << "\n";
+  
   // CPU backend: deserialize directly from std::vector (backward compatible)
   if (backend_type == "cpu") {
+    std::cerr << "[Buffer Deserialization] CPU backend - deserializing as std::vector\n";
     std::vector<T> vec;
     cdr >> vec;
+    
+    std::cerr << "[Buffer Deserialization] Deserialized " << vec.size() << " elements\n";
     
     // Copy into buffer (which defaults to CPU backend)
     buffer.resize(vec.size());
     for (size_t i = 0; i < vec.size(); ++i) {
       buffer[i] = vec[i];
     }
+    std::cerr << "[Buffer Deserialization] CPU buffer reconstruction complete\n";
     return cdr;
   }
   
@@ -251,10 +257,14 @@ inline Cdr & operator>>(Cdr & cdr, rosidl_runtime_cpp::Buffer<T, Allocator> & bu
   std::string descriptor_type_name;
   
   cdr >> element_type_id;
+  std::cerr << "[Buffer Deserialization] Element type: " << element_type_id << "\n";
+  
   cdr >> descriptor_type_name;
+  std::cerr << "[Buffer Deserialization] Descriptor type name: " << descriptor_type_name << "\n";
   
   // Validate element type
   if (element_type_id != typeid(T).name()) {
+    std::cerr << "[Buffer Deserialization] ERROR: Type mismatch!\n";
     throw std::runtime_error(
       "Type mismatch during deserialization: expected " + 
       std::string(typeid(T).name()) + ", got " + element_type_id);
@@ -264,33 +274,46 @@ inline Cdr & operator>>(Cdr & cdr, rosidl_runtime_cpp::Buffer<T, Allocator> & bu
   auto & backend_ops = rosidl_typesupport_fastrtps_cpp::get_backend_descriptor_ops();
   auto ops_it = backend_ops.find(backend_type);
   if (ops_it == backend_ops.end()) {
+    std::cerr << "[Buffer Deserialization] ERROR: Backend '" << backend_type << "' not registered!\n";
     throw std::runtime_error(
       "No backend registered for type: " + backend_type + 
       ". RMW layer may not have initialized buffer backends.");
   }
   
+  std::cerr << "[Buffer Deserialization] Backend ops found\n";
+  
   // Get FastCDR serializers for this backend
   auto & serializers = rosidl_typesupport_fastrtps_cpp::get_descriptor_serializers();
   auto ser_it = serializers.find(backend_type);
   if (ser_it == serializers.end()) {
+    std::cerr << "[Buffer Deserialization] ERROR: FastCDR deserializers not registered for backend '" << backend_type << "'!\n";
     throw std::runtime_error(
       "FastCDR serializers not registered for backend: " + backend_type);
   }
   
+  std::cerr << "[Buffer Deserialization] FastCDR deserializers found\n";
+  
   // Deserialize descriptor using registered FastCDR function
+  std::cerr << "[Buffer Deserialization] About to deserialize descriptor message\n";
   auto descriptor = ser_it->second.deserialize(cdr);
+  std::cerr << "[Buffer Deserialization] Descriptor message deserialized\n";
   
   // Create buffer implementation from descriptor (returns shared_ptr)
+  std::cerr << "[Buffer Deserialization] Creating buffer impl from descriptor\n";
   auto impl_shared = ops_it->second.from_descriptor(descriptor);
+  std::cerr << "[Buffer Deserialization] Buffer impl created from descriptor\n";
   
   // Cast to correct type
   auto typed_impl_shared = std::static_pointer_cast<rosidl_runtime_cpp::BufferImplBase<T>>(impl_shared);
   
   // Transfer ownership: create unique_ptr from the shared_ptr by cloning
   // This ensures proper value semantics and unique ownership in the Buffer
+  std::cerr << "[Buffer Deserialization] Cloning impl for unique ownership\n";
   std::unique_ptr<rosidl_runtime_cpp::BufferImplBase<T>> typed_impl_unique = typed_impl_shared->clone();
   
+  std::cerr << "[Buffer Deserialization] Setting impl on buffer\n";
   buffer.set_impl(std::move(typed_impl_unique), backend_type);
+  std::cerr << "[Buffer Deserialization] Deserialization complete\n";
   
   return cdr;
 }
