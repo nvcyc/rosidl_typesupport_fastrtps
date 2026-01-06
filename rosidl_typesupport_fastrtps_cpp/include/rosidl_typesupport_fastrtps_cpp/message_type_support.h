@@ -16,9 +16,12 @@
 #define ROSIDL_TYPESUPPORT_FASTRTPS_CPP__MESSAGE_TYPE_SUPPORT_H_
 
 #include <cstddef>
+#include <string>
+#include <vector>
 
 #include "fastcdr/Cdr.h"
 
+#include "rmw/types.h"
 #include "rosidl_runtime_c/message_type_support_struct.h"
 
 /// Feature define to allow API version detection
@@ -113,6 +116,36 @@ typedef struct message_type_support_callbacks_t
   /// Pointer to the message_type_support_key_callbacks_t.
   /// Nullptr if the type is not keyed.
   message_type_support_key_callbacks_t * key_callbacks;
+
+  /// Flag indicating if the message type contains Buffer<T> fields.
+  /// Set at code generation time.
+  bool has_buffer_fields;
+
+  /// Callback function for locality-aware message serialization
+  /// Only called if has_buffer_fields is true.
+  /**
+   * \param[in] untyped_ros_message Type erased pointer to message instance.
+   * \param [in,out] cdr Fast CDR serializer.
+   * \param [in] locality Locality of the remote endpoint.
+   * \return true if serialization succeeded, false otherwise.
+   */
+  bool (* cdr_serialize_with_locality)(
+    const void * untyped_ros_message,
+    eprosima::fastcdr::Cdr & cdr,
+    rmw_endpoint_locality_t locality);
+
+  /// Callback function for locality-aware message deserialization
+  /// Only called if has_buffer_fields is true.
+  /**
+   * \param [in] cdr Serialized FastCDR data object.
+   * \param[out] untyped_ros_message Type erased pointer to message instance.
+   * \param [in] locality Locality of the remote endpoint.
+   * \return true if deserialization succeeded, false otherwise.
+   */
+  bool (* cdr_deserialize_with_locality)(
+    eprosima::fastcdr::Cdr & cdr,
+    void * untyped_ros_message,
+    rmw_endpoint_locality_t locality);
 } message_type_support_callbacks_t;
 
 #endif  // ROSIDL_TYPESUPPORT_FASTRTPS_CPP__MESSAGE_TYPE_SUPPORT_H_

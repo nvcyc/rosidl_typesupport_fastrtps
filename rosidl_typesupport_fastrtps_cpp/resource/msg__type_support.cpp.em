@@ -13,6 +13,9 @@ from rosidl_parser.definition import BasicType
 from rosidl_parser.definition import BoundedSequence
 from rosidl_parser.definition import NamespacedType
 
+# Detect if message has Buffer fields (AbstractNestedType members)
+has_buffer_fields = any(isinstance(member.type, AbstractNestedType) for member in message.structure.members)
+
 header_files = [
     'cstddef',
     'limits',
@@ -308,6 +311,37 @@ cdr_deserialize(
 @[end for]@
   return true;
 }  // NOLINT(readability/fn_size)
+
+@[if has_buffer_fields]@
+// Locality-aware serialization for Buffer message types
+bool
+ROSIDL_TYPESUPPORT_FASTRTPS_CPP_PUBLIC_@(package_name)
+cdr_serialize_with_locality(
+  const @('::'.join([package_name] + list(interface_path.parents[0].parts) + [message.structure.namespaced_type.name])) & ros_message,
+  eprosima::fastcdr::Cdr & cdr,
+  rmw_endpoint_locality_t locality)
+{
+  // For now, use the same serialization as regular path
+  // TODO: Implement locality-aware optimizations based on locality and supported_backends
+  (void)locality;
+  (void)supported_backends;
+  return cdr_serialize(ros_message, cdr);
+}
+
+// Locality-aware deserialization for Buffer message types
+bool
+ROSIDL_TYPESUPPORT_FASTRTPS_CPP_PUBLIC_@(package_name)
+cdr_deserialize_with_locality(
+  eprosima::fastcdr::Cdr & cdr,
+  @('::'.join([package_name] + list(interface_path.parents[0].parts) + [message.structure.namespaced_type.name])) & ros_message,
+  rmw_endpoint_locality_t locality)
+{
+  // For now, use the same deserialization as regular path
+  // TODO: Implement locality-aware optimizations based on locality
+  (void)locality;
+  return cdr_deserialize(cdr, ros_message);
+}
+@[end if]@
 
 @{
 
@@ -702,6 +736,32 @@ static size_t _@(message.structure.namespaced_type.name)__max_serialized_size(ch
   return ret_val;
 }
 
+@[if has_buffer_fields]@
+// Locality-aware serialization wrapper
+static bool _@(message.structure.namespaced_type.name)__cdr_serialize_with_locality(
+  const void * untyped_ros_message,
+  eprosima::fastcdr::Cdr & cdr,
+  rmw_endpoint_locality_t locality)
+{
+  auto typed_message =
+    static_cast<const @('::'.join([package_name] + list(interface_path.parents[0].parts) + [message.structure.namespaced_type.name])) *>(
+    untyped_ros_message);
+  return cdr_serialize_with_locality(*typed_message, cdr, locality);
+}
+
+// Locality-aware deserialization wrapper
+static bool _@(message.structure.namespaced_type.name)__cdr_deserialize_with_locality(
+  eprosima::fastcdr::Cdr & cdr,
+  void * untyped_ros_message,
+  rmw_endpoint_locality_t locality)
+{
+  auto typed_message =
+    static_cast<@('::'.join([package_name] + list(interface_path.parents[0].parts) + [message.structure.namespaced_type.name])) *>(
+    untyped_ros_message);
+  return cdr_deserialize_with_locality(cdr, *typed_message, locality);
+}
+@[end if]@
+
 static message_type_support_callbacks_t _@(message.structure.namespaced_type.name)__callbacks = {
   "@('::'.join([package_name] + list(interface_path.parents[0].parts)))",
   "@(message.structure.namespaced_type.name)",
@@ -710,8 +770,16 @@ static message_type_support_callbacks_t _@(message.structure.namespaced_type.nam
   _@(message.structure.namespaced_type.name)__get_serialized_size,
   _@(message.structure.namespaced_type.name)__max_serialized_size,
 @[  if message.structure.has_any_member_with_annotation('key') ]@
-  &_@(message.structure.namespaced_type.name)__key_callbacks
+  &_@(message.structure.namespaced_type.name)__key_callbacks,
 @[  else]@
+  nullptr,
+@[  end if]@
+  @('true' if has_buffer_fields else 'false'),
+@[  if has_buffer_fields]@
+  _@(message.structure.namespaced_type.name)__cdr_serialize_with_locality,
+  _@(message.structure.namespaced_type.name)__cdr_deserialize_with_locality
+@[  else]@
+  nullptr,
   nullptr
 @[  end if]@
 };
