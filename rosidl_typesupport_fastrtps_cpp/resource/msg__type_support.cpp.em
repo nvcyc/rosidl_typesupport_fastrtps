@@ -113,8 +113,9 @@ namespace typesupport_fastrtps_cpp
 # Generates the definition for the serialization family of methods given a structure member
 #   member: the member to serialize
 #   suffix: the suffix name of the method. Will be used in case of recursion
+#   locality_param: parameter name for locality (e.g., 'locality' or '')
 
-def generate_member_for_cdr_serialize(member, suffix):
+def generate_member_for_cdr_serialize(member, suffix, locality_param=''):
   from rosidl_generator_cpp import msg_type_only_to_cpp
   from rosidl_generator_cpp import msg_type_to_cpp
   from rosidl_parser.definition import AbstractGenericString
@@ -127,6 +128,16 @@ def generate_member_for_cdr_serialize(member, suffix):
   from rosidl_parser.definition import NamespacedType
   strlist = []
   strlist.append('// Member: %s' % (member.name))
+  
+  # Handle locality-aware serialization for Buffer fields
+  if suffix == '_with_locality' and isinstance(member.type, AbstractNestedType):
+    # Buffer fields use locality-aware serialization
+    strlist.append('{')
+    strlist.append('  rosidl_typesupport_fastrtps_cpp::serialize_buffer_with_locality(')
+    strlist.append('    cdr, ros_message.%s, %s);' % (member.name, locality_param))
+    strlist.append('}')
+    return strlist
+  
   if isinstance(member.type, AbstractNestedType):
     strlist.append('{')
     if isinstance(member.type, Array):
@@ -321,11 +332,14 @@ cdr_serialize_with_locality(
   eprosima::fastcdr::Cdr & cdr,
   rmw_endpoint_locality_t locality)
 {
-  // For now, use the same serialization as regular path
-  // TODO: Implement locality-aware optimizations based on locality and supported_backends
-  (void)locality;
-  (void)supported_backends;
-  return cdr_serialize(ros_message, cdr);
+  // Serialize all fields, using locality-aware serialization for Buffer fields
+@[for member in message.structure.members]@
+@[  for line in generate_member_for_cdr_serialize(member, '_with_locality', 'locality')]@
+  @(line)
+@[  end for]@
+
+@[end for]@
+  return true;
 }
 
 // Locality-aware deserialization for Buffer message types
@@ -336,10 +350,41 @@ cdr_deserialize_with_locality(
   @('::'.join([package_name] + list(interface_path.parents[0].parts) + [message.structure.namespaced_type.name])) & ros_message,
   rmw_endpoint_locality_t locality)
 {
-  // For now, use the same deserialization as regular path
-  // TODO: Implement locality-aware optimizations based on locality
-  (void)locality;
-  return cdr_deserialize(cdr, ros_message);
+  // Deserialize all fields, using locality-aware deserialization for Buffer fields
+@[for member in message.structure.members]@
+  // Member: @(member.name)
+@[  if isinstance(member.type, AbstractNestedType)]@
+  {
+    // Buffer field: use locality-aware deserialization
+    rosidl_typesupport_fastrtps_cpp::deserialize_buffer_with_locality(
+      cdr, ros_message.@(member.name), locality);
+  }
+@[  elif isinstance(member.type, BasicType) and member.type.typename == 'boolean']@
+  cdr >> ros_message.@(member.name);
+@[  elif isinstance(member.type, BasicType) and member.type.typename == 'wchar']@
+  {
+    uint16_t wchar_value;
+    cdr >> wchar_value;
+    ros_message.@(member.name) = static_cast<wchar_t>(wchar_value);
+  }
+@[  elif isinstance(member.type, AbstractWString)]@
+  {
+    bool succeeded = rosidl_typesupport_fastrtps_cpp::cdr_deserialize(cdr, ros_message.@(member.name));
+    if (!succeeded) {
+      fprintf(stderr, "failed to deserialize u16string\n");
+      return false;
+    }
+  }
+@[  elif not isinstance(member.type, NamespacedType)]@
+  cdr >> ros_message.@(member.name);
+@[  else]@
+  @('::'.join(member.type.namespaces))::typesupport_fastrtps_cpp::cdr_deserialize(
+    cdr,
+    ros_message.@(member.name));
+@[  end if]@
+
+@[end for]@
+  return true;
 }
 @[end if]@
 
