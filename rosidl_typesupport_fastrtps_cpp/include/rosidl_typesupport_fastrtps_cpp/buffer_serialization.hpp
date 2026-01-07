@@ -43,9 +43,11 @@ struct BackendDescriptorOps
   // Create buffer impl from descriptor
   std::function<std::shared_ptr<void>(const std::shared_ptr<void> &)> from_descriptor;
   // Create descriptor with locality awareness
-  std::function<std::shared_ptr<void>(const std::shared_ptr<void> &, rmw_endpoint_locality_t)> create_descriptor_with_locality;
+  std::function<std::shared_ptr<void>(const std::shared_ptr<void> &,
+    rmw_endpoint_locality_t)> create_descriptor_with_locality;
   // Create buffer impl from descriptor with locality awareness
-  std::function<std::shared_ptr<void>(const std::shared_ptr<void> &, rmw_endpoint_locality_t)> from_descriptor_with_locality;
+  std::function<std::shared_ptr<void>(const std::shared_ptr<void> &,
+    rmw_endpoint_locality_t)> from_descriptor_with_locality;
   // Descriptor type name (e.g., "cuda_buffer_msgs::msg::CudaBufferDescriptor")
   std::string descriptor_type_name;
 };
@@ -85,15 +87,15 @@ inline std::unordered_map<std::string, DescriptorSerializers> & get_descriptor_s
     auto & serializers = rosidl_typesupport_fastrtps_cpp::get_descriptor_serializers(); \
     rosidl_typesupport_fastrtps_cpp::DescriptorSerializers desc_ser; \
     desc_ser.serialize = [](eprosima::fastcdr::Cdr & cdr, \
-                             const std::shared_ptr<void> & desc_ptr) { \
-      auto desc = std::static_pointer_cast<MessageType>(desc_ptr); \
-      pkg_name::msg::typesupport_fastrtps_cpp::cdr_serialize(*desc, cdr); \
-    }; \
+      const std::shared_ptr<void> & desc_ptr) { \
+        auto desc = std::static_pointer_cast<MessageType>(desc_ptr); \
+        pkg_name::msg::typesupport_fastrtps_cpp::cdr_serialize(*desc, cdr); \
+      }; \
     desc_ser.deserialize = [](eprosima::fastcdr::Cdr & cdr) -> std::shared_ptr<void> { \
-      auto desc = std::make_shared<MessageType>(); \
-      pkg_name::msg::typesupport_fastrtps_cpp::cdr_deserialize(cdr, *desc); \
-      return desc; \
-    }; \
+        auto desc = std::make_shared<MessageType>(); \
+        pkg_name::msg::typesupport_fastrtps_cpp::cdr_deserialize(cdr, *desc); \
+        return desc; \
+      }; \
     serializers[backend_name] = desc_ser; \
   } while (0)
 
@@ -105,14 +107,14 @@ inline size_t get_buffer_serialized_size(
 {
   size_t initial_alignment = current_alignment;
   const size_t padding = 4;
-  
+
   const std::string backend_type = buffer.get_backend_type();
-  
+
   // Size of backend_type string
   current_alignment += padding +
     eprosima::fastcdr::Cdr::alignment(current_alignment, padding) +
     backend_type.size() + 1;  // +1 for null terminator
-  
+
   if (backend_type == "cpu") {
     // Size of vector: array size (4 bytes) + elements
     size_t array_size = buffer.size();
@@ -129,7 +131,7 @@ inline size_t get_buffer_serialized_size(
     size_t metadata_overhead = 512;  // Strings, integers, bool, etc.
     current_alignment += buffer_data_size + metadata_overhead;
   }
-  
+
   return current_alignment - initial_alignment;
 }
 
@@ -142,26 +144,26 @@ inline void serialize_buffer_with_locality(
   rmw_endpoint_locality_t locality)
 {
   const std::string backend_type = buffer.get_backend_type();
-  
+
   // Serialize backend type first
   cdr << backend_type;
-  
+
   // CPU backend: serialize directly as std::vector (locality doesn't affect CPU)
   if (backend_type == "cpu") {
     const std::vector<T> & vec = buffer;
     cdr << vec;
     return;
   }
-  
+
   // Vendor backends: use locality-aware descriptor approach
   const std::string element_type_id = typeid(T).name();
   cdr << element_type_id;
-  
-  const auto* impl = buffer.get_impl();
+
+  const auto * impl = buffer.get_impl();
   if (!impl) {
     throw std::runtime_error("Buffer implementation is null");
   }
-  
+
   // Get backend descriptor operations
   auto & backend_ops = get_backend_descriptor_ops();
   auto ops_it = backend_ops.find(backend_type);
@@ -169,7 +171,7 @@ inline void serialize_buffer_with_locality(
     throw std::runtime_error(
       "No backend registered for type: " + backend_type);
   }
-  
+
   // Get FastCDR serializers
   auto & serializers = get_descriptor_serializers();
   auto ser_it = serializers.find(backend_type);
@@ -177,21 +179,21 @@ inline void serialize_buffer_with_locality(
     throw std::runtime_error(
       "FastCDR serializers not registered for backend: " + backend_type);
   }
-  
+
   // Serialize descriptor type name
   cdr << ops_it->second.descriptor_type_name;
-  
+
   // Create descriptor with locality awareness
-  auto* non_const_impl = const_cast<rosidl_runtime_cpp::BufferImplBase<T>*>(impl);
-  std::shared_ptr<void> impl_shared(static_cast<void*>(non_const_impl), [](void*){});
-  
+  auto * non_const_impl = const_cast<rosidl_runtime_cpp::BufferImplBase<T> *>(impl);
+  std::shared_ptr<void> impl_shared(static_cast<void *>(non_const_impl), [](void *){});
+
   std::shared_ptr<void> descriptor;
   if (ops_it->second.create_descriptor_with_locality) {
     descriptor = ops_it->second.create_descriptor_with_locality(impl_shared, locality);
   } else {
     descriptor = ops_it->second.create_descriptor(impl_shared);
   }
-  
+
   // Serialize descriptor
   ser_it->second.serialize(cdr, descriptor);
 }
@@ -206,33 +208,33 @@ inline void deserialize_buffer_with_locality(
   // Deserialize backend type first
   std::string backend_type;
   cdr >> backend_type;
-  
+
   // CPU backend: deserialize directly from std::vector
   if (backend_type == "cpu") {
     std::vector<T> vec;
     cdr >> vec;
-    
+
     buffer.resize(vec.size());
     for (size_t i = 0; i < vec.size(); ++i) {
       buffer[i] = vec[i];
     }
     return;
   }
-  
+
   // Vendor backends: use locality-aware descriptor approach
   std::string element_type_id;
   std::string descriptor_type_name;
-  
+
   cdr >> element_type_id;
   cdr >> descriptor_type_name;
-  
+
   // Validate element type
   if (element_type_id != typeid(T).name()) {
     throw std::runtime_error(
-      "Type mismatch during deserialization: expected " + 
+      "Type mismatch during deserialization: expected " +
       std::string(typeid(T).name()) + ", got " + element_type_id);
   }
-  
+
   // Get backend descriptor operations
   auto & backend_ops = get_backend_descriptor_ops();
   auto ops_it = backend_ops.find(backend_type);
@@ -240,7 +242,7 @@ inline void deserialize_buffer_with_locality(
     throw std::runtime_error(
       "No backend registered for type: " + backend_type);
   }
-  
+
   // Get FastCDR serializers
   auto & serializers = get_descriptor_serializers();
   auto ser_it = serializers.find(backend_type);
@@ -248,10 +250,10 @@ inline void deserialize_buffer_with_locality(
     throw std::runtime_error(
       "FastCDR serializers not registered for backend: " + backend_type);
   }
-  
+
   // Deserialize descriptor
   auto descriptor = ser_it->second.deserialize(cdr);
-  
+
   // Create buffer implementation with locality awareness
   std::shared_ptr<void> impl_shared;
   if (ops_it->second.from_descriptor_with_locality) {
@@ -259,10 +261,12 @@ inline void deserialize_buffer_with_locality(
   } else {
     impl_shared = ops_it->second.from_descriptor(descriptor);
   }
-  
-  auto typed_impl_shared = std::static_pointer_cast<rosidl_runtime_cpp::BufferImplBase<T>>(impl_shared);
-  std::unique_ptr<rosidl_runtime_cpp::BufferImplBase<T>> typed_impl_unique = typed_impl_shared->clone();
-  
+
+  auto typed_impl_shared =
+    std::static_pointer_cast<rosidl_runtime_cpp::BufferImplBase<T>>(impl_shared);
+  std::unique_ptr<rosidl_runtime_cpp::BufferImplBase<T>> typed_impl_unique =
+    typed_impl_shared->clone();
+
   buffer.set_impl(std::move(typed_impl_unique), backend_type);
 }
 
@@ -294,70 +298,73 @@ template<typename T, typename Allocator>
 inline Cdr & operator<<(Cdr & cdr, const rosidl_runtime_cpp::Buffer<T, Allocator> & buffer)
 {
   const std::string backend_type = buffer.get_backend_type();
-  
+
   // Serialize backend type first
   cdr << backend_type;
-  
+
   // CPU backend: serialize directly as std::vector (backward compatible, no descriptor needed)
   if (backend_type == "cpu") {
     const std::vector<T> & vec = buffer;
     cdr << vec;
     return cdr;
   }
-  
+
   // Vendor backends: use descriptor approach
   const std::string element_type_id = typeid(T).name();
   cdr << element_type_id;
-  
-  const auto* impl = buffer.get_impl();  // Returns const BufferImplBase<T>*
+
+  const auto * impl = buffer.get_impl();  // Returns const BufferImplBase<T>*
   std::cerr << "[Buffer Serialization] Serializing Buffer with backend: " << backend_type << "\n";
-  
+
   if (!impl) {
     throw std::runtime_error("Buffer implementation is null");
   }
-  
+
   // Get backend descriptor operations (populated by RMW layer)
   auto & backend_ops = rosidl_typesupport_fastrtps_cpp::get_backend_descriptor_ops();
   auto ops_it = backend_ops.find(backend_type);
   if (ops_it == backend_ops.end()) {
     std::cerr << "[Buffer Serialization] ERROR: Backend '" << backend_type << "' not registered!\n";
     throw std::runtime_error(
-      "No backend registered for type: " + backend_type + 
+      "No backend registered for type: " + backend_type +
       ". RMW layer may not have initialized buffer backends.");
   }
-  
+
   std::cerr << "[Buffer Serialization] Backend ops found\n";
-  
+
   // Get FastCDR serializers for this backend
   auto & serializers = rosidl_typesupport_fastrtps_cpp::get_descriptor_serializers();
   auto ser_it = serializers.find(backend_type);
   if (ser_it == serializers.end()) {
-    std::cerr << "[Buffer Serialization] ERROR: FastCDR serializers not registered for backend '" << backend_type << "'!\n";
+    std::cerr << "[Buffer Serialization] ERROR: FastCDR serializers not registered for backend '" <<
+          backend_type << "'!\n";
     throw std::runtime_error(
       "FastCDR serializers not registered for backend: " + backend_type);
   }
-  
+
   std::cerr << "[Buffer Serialization] FastCDR serializers found\n";
-  
+
   // Serialize descriptor type name
-  std::cerr << "[Buffer Serialization] About to serialize descriptor_type_name: " << ops_it->second.descriptor_type_name << "\n";
+  std::cerr << "[Buffer Serialization] About to serialize descriptor_type_name: " <<
+        ops_it->second.descriptor_type_name << "\n";
   cdr << ops_it->second.descriptor_type_name;
   std::cerr << "[Buffer Serialization] Descriptor type name serialized\n";
-  
+
   // Create descriptor from buffer implementation
   // Wrap raw pointer in shared_ptr with no-op deleter since Buffer owns the impl via unique_ptr
   std::cerr << "[Buffer Serialization] Creating descriptor from impl\n";
   // Remove const and wrap in shared_ptr with no-op deleter
-  auto* non_const_impl = const_cast<rosidl_runtime_cpp::BufferImplBase<T>*>(impl);
-  std::shared_ptr<void> impl_shared(static_cast<void*>(non_const_impl), [](void*){/* no-op deleter */});
+  auto * non_const_impl = const_cast<rosidl_runtime_cpp::BufferImplBase<T> *>(impl);
+  std::shared_ptr<void> impl_shared(static_cast<void *>(non_const_impl), [](void *){/* no-op deleter */
+    });
   auto descriptor = ops_it->second.create_descriptor(impl_shared);
   std::cerr << "[Buffer Serialization] Descriptor created\n";
-  
+
   // Serialize descriptor using registered FastCDR function
   std::cerr << "[Buffer Serialization] About to serialize descriptor message\n";
   ser_it->second.serialize(cdr, descriptor);
   std::cerr << "[Buffer Serialization] Descriptor message serialized\n";
-  
+
   return cdr;
 }
 
@@ -370,17 +377,18 @@ inline Cdr & operator>>(Cdr & cdr, rosidl_runtime_cpp::Buffer<T, Allocator> & bu
   // Deserialize backend type first
   std::string backend_type;
   cdr >> backend_type;
-  
-  std::cerr << "[Buffer Deserialization] Deserializing Buffer with backend: " << backend_type << "\n";
-  
+
+  std::cerr << "[Buffer Deserialization] Deserializing Buffer with backend: " << backend_type <<
+        "\n";
+
   // CPU backend: deserialize directly from std::vector (backward compatible)
   if (backend_type == "cpu") {
     std::cerr << "[Buffer Deserialization] CPU backend - deserializing as std::vector\n";
     std::vector<T> vec;
     cdr >> vec;
-    
+
     std::cerr << "[Buffer Deserialization] Deserialized " << vec.size() << " elements\n";
-    
+
     // Copy into buffer (which defaults to CPU backend)
     buffer.resize(vec.size());
     for (size_t i = 0; i < vec.size(); ++i) {
@@ -389,70 +397,75 @@ inline Cdr & operator>>(Cdr & cdr, rosidl_runtime_cpp::Buffer<T, Allocator> & bu
     std::cerr << "[Buffer Deserialization] CPU buffer reconstruction complete\n";
     return cdr;
   }
-  
+
   // Vendor backends: use descriptor approach
   std::string element_type_id;
   std::string descriptor_type_name;
-  
+
   cdr >> element_type_id;
   std::cerr << "[Buffer Deserialization] Element type: " << element_type_id << "\n";
-  
+
   cdr >> descriptor_type_name;
   std::cerr << "[Buffer Deserialization] Descriptor type name: " << descriptor_type_name << "\n";
-  
+
   // Validate element type
   if (element_type_id != typeid(T).name()) {
     std::cerr << "[Buffer Deserialization] ERROR: Type mismatch!\n";
     throw std::runtime_error(
-      "Type mismatch during deserialization: expected " + 
+      "Type mismatch during deserialization: expected " +
       std::string(typeid(T).name()) + ", got " + element_type_id);
   }
-  
+
   // Get backend descriptor operations (populated by RMW layer)
   auto & backend_ops = rosidl_typesupport_fastrtps_cpp::get_backend_descriptor_ops();
   auto ops_it = backend_ops.find(backend_type);
   if (ops_it == backend_ops.end()) {
-    std::cerr << "[Buffer Deserialization] ERROR: Backend '" << backend_type << "' not registered!\n";
+    std::cerr << "[Buffer Deserialization] ERROR: Backend '" << backend_type <<
+          "' not registered!\n";
     throw std::runtime_error(
-      "No backend registered for type: " + backend_type + 
+      "No backend registered for type: " + backend_type +
       ". RMW layer may not have initialized buffer backends.");
   }
-  
+
   std::cerr << "[Buffer Deserialization] Backend ops found\n";
-  
+
   // Get FastCDR serializers for this backend
   auto & serializers = rosidl_typesupport_fastrtps_cpp::get_descriptor_serializers();
   auto ser_it = serializers.find(backend_type);
   if (ser_it == serializers.end()) {
-    std::cerr << "[Buffer Deserialization] ERROR: FastCDR deserializers not registered for backend '" << backend_type << "'!\n";
+    std::cerr <<
+          "[Buffer Deserialization] ERROR: FastCDR deserializers not registered for backend '" <<
+          backend_type << "'!\n";
     throw std::runtime_error(
       "FastCDR serializers not registered for backend: " + backend_type);
   }
-  
+
   std::cerr << "[Buffer Deserialization] FastCDR deserializers found\n";
-  
+
   // Deserialize descriptor using registered FastCDR function
   std::cerr << "[Buffer Deserialization] About to deserialize descriptor message\n";
   auto descriptor = ser_it->second.deserialize(cdr);
   std::cerr << "[Buffer Deserialization] Descriptor message deserialized\n";
-  
+
   // Create buffer implementation from descriptor (returns shared_ptr)
   std::cerr << "[Buffer Deserialization] Creating buffer impl from descriptor\n";
   auto impl_shared = ops_it->second.from_descriptor(descriptor);
   std::cerr << "[Buffer Deserialization] Buffer impl created from descriptor\n";
-  
+
   // Cast to correct type
-  auto typed_impl_shared = std::static_pointer_cast<rosidl_runtime_cpp::BufferImplBase<T>>(impl_shared);
-  
+  auto typed_impl_shared =
+    std::static_pointer_cast<rosidl_runtime_cpp::BufferImplBase<T>>(impl_shared);
+
   // Transfer ownership: create unique_ptr from the shared_ptr by cloning
   // This ensures proper value semantics and unique ownership in the Buffer
   std::cerr << "[Buffer Deserialization] Cloning impl for unique ownership\n";
-  std::unique_ptr<rosidl_runtime_cpp::BufferImplBase<T>> typed_impl_unique = typed_impl_shared->clone();
-  
+  std::unique_ptr<rosidl_runtime_cpp::BufferImplBase<T>> typed_impl_unique =
+    typed_impl_shared->clone();
+
   std::cerr << "[Buffer Deserialization] Setting impl on buffer\n";
   buffer.set_impl(std::move(typed_impl_unique), backend_type);
   std::cerr << "[Buffer Deserialization] Deserialization complete\n";
-  
+
   return cdr;
 }
 
