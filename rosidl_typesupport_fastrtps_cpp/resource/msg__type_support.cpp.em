@@ -142,6 +142,8 @@ def generate_member_for_cdr_serialize(member, suffix, locality_param=''):
     strlist.append('}')
     return strlist
   
+  nested_msg_suffix = '' if suffix == '_with_locality' else suffix
+  
   if isinstance(member.type, AbstractNestedType):
     strlist.append('{')
     if isinstance(member.type, Array):
@@ -150,7 +152,7 @@ def generate_member_for_cdr_serialize(member, suffix, locality_param=''):
       else:
         strlist.append('  for (size_t i = 0; i < %d; i++) {' % (member.type.size))
         if isinstance(member.type.value_type, NamespacedType):
-          strlist.append('    %s::typesupport_fastrtps_cpp::cdr_serialize%s(' % (('::'.join(member.type.value_type.namespaces)), suffix))
+          strlist.append('    %s::typesupport_fastrtps_cpp::cdr_serialize%s(' % (('::'.join(member.type.value_type.namespaces)), nested_msg_suffix))
           strlist.append('      ros_message.%s[i],' % (member.name))
           strlist.append('      cdr);')
         else:
@@ -182,7 +184,7 @@ def generate_member_for_cdr_serialize(member, suffix, locality_param=''):
           elif not isinstance(member.type.value_type, NamespacedType):
             strlist.append('    cdr << ros_message.%s[i];' % (member.name))
           else:
-            strlist.append('    %s::typesupport_fastrtps_cpp::cdr_serialize%s(' % (('::'.join(member.type.value_type.namespaces)), suffix))
+            strlist.append('    %s::typesupport_fastrtps_cpp::cdr_serialize%s(' % (('::'.join(member.type.value_type.namespaces)), nested_msg_suffix))
             strlist.append('      ros_message.%s[i],' % (member.name))
             strlist.append('      cdr);')
           strlist.append('  }')
@@ -198,7 +200,7 @@ def generate_member_for_cdr_serialize(member, suffix, locality_param=''):
   elif not isinstance(member.type, NamespacedType):
     strlist.append('cdr << ros_message.%s;' % (member.name))
   else:
-    strlist.append('%s::typesupport_fastrtps_cpp::cdr_serialize%s(' % (('::'.join(member.type.namespaces)), suffix))
+    strlist.append('%s::typesupport_fastrtps_cpp::cdr_serialize%s(' % (('::'.join(member.type.namespaces)), nested_msg_suffix))
     strlist.append('  ros_message.%s,' % (member.name))
     strlist.append('  cdr);')
   return strlist
