@@ -31,6 +31,7 @@ forward_declared_types = set()
 # Handle message
 #######################################################################
 from rosidl_parser.definition import Message
+from rosidl_parser.definition import AbstractNestedType
 for message in content.get_elements_of_type(Message):
     TEMPLATE(
         'msg__type_support.cpp.em',

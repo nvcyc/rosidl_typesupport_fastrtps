@@ -13,9 +13,6 @@ from rosidl_parser.definition import BasicType
 from rosidl_parser.definition import BoundedSequence
 from rosidl_parser.definition import NamespacedType
 
-# Detect if message has Buffer fields (AbstractNestedType members)
-has_buffer_fields = any(isinstance(member.type, AbstractNestedType) for member in message.structure.members)
-
 header_files = [
     'cstddef',
     'limits',
@@ -30,6 +27,13 @@ header_files = [
     'rosidl_typesupport_fastrtps_cpp/buffer_serialization.hpp',
     'fastcdr/Cdr.h',
 ]
+
+# Detect if message has Buffer fields (AbstractNestedType members)
+has_buffer_fields = False
+for member in message.structure.members:
+    if isinstance(member.type, AbstractNestedType):
+        has_buffer_fields = True
+        break
 }@
 @[for header_file in header_files]@
 @[    if header_file in include_directives]@
