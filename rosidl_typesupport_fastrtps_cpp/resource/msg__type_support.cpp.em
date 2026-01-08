@@ -12,6 +12,7 @@ from rosidl_parser.definition import Array
 from rosidl_parser.definition import BasicType
 from rosidl_parser.definition import BoundedSequence
 from rosidl_parser.definition import NamespacedType
+from rosidl_parser.definition import UnboundedSequence
 
 header_files = [
     'cstddef',
@@ -28,13 +29,18 @@ header_files = [
     'fastcdr/Cdr.h',
 ]
 
-# Detect if message has Buffer fields (AbstractNestedType members)
+# Detect if message has Buffer fields (UnboundedSequence members become Buffer<T>)
 has_buffer_fields = False
 for member in message.structure.members:
-    if isinstance(member.type, AbstractNestedType):
+    if isinstance(member.type, UnboundedSequence):
         has_buffer_fields = True
         break
 }@
+// DEBUG: Message @(message.structure.namespaced_type.name) has_buffer_fields = @('true' if has_buffer_fields else 'false')
+@[for member in message.structure.members]@
+// DEBUG: Member @(member.name): type=@(type(member.type).__name__)
+@[end for]@
+
 @[for header_file in header_files]@
 @[    if header_file in include_directives]@
 // already included above
@@ -130,11 +136,12 @@ def generate_member_for_cdr_serialize(member, suffix, locality_param=''):
   from rosidl_parser.definition import BasicType
   from rosidl_parser.definition import BoundedSequence
   from rosidl_parser.definition import NamespacedType
+  from rosidl_parser.definition import UnboundedSequence
   strlist = []
   strlist.append('// Member: %s' % (member.name))
   
-  # Handle locality-aware serialization for Buffer fields
-  if suffix == '_with_locality' and isinstance(member.type, AbstractNestedType):
+  # Handle locality-aware serialization for Buffer fields (UnboundedSequence -> Buffer<T>)
+  if suffix == '_with_locality' and isinstance(member.type, UnboundedSequence):
     # Buffer fields use locality-aware serialization
     strlist.append('{')
     strlist.append('  rosidl_typesupport_fastrtps_cpp::serialize_buffer_with_locality(')
@@ -356,14 +363,79 @@ cdr_deserialize_with_locality(
   @('::'.join([package_name] + list(interface_path.parents[0].parts) + [message.structure.namespaced_type.name])) & ros_message,
   rmw_endpoint_locality_t locality)
 {
-  // Deserialize all fields, using locality-aware deserialization for Buffer fields
+  // Deserialize all fields, using locality-aware deserialization for Buffer fields (UnboundedSequence)
 @[for member in message.structure.members]@
   // Member: @(member.name)
-@[  if isinstance(member.type, AbstractNestedType)]@
+@[  if isinstance(member.type, UnboundedSequence)]@
   {
-    // Buffer field: use locality-aware deserialization
+    // Buffer field (UnboundedSequence -> Buffer<T>): use locality-aware deserialization
     rosidl_typesupport_fastrtps_cpp::deserialize_buffer_with_locality(
       cdr, ros_message.@(member.name), locality);
+  }
+@[  elif isinstance(member.type, AbstractNestedType)]@
+  {
+@[    if isinstance(member.type, Array)]@
+@[      if not isinstance(member.type.value_type, (NamespacedType, AbstractWString))]@
+    cdr >> ros_message.@(member.name);
+@[      else]@
+    for (size_t i = 0; i < @(member.type.size); i++) {
+@[        if isinstance(member.type.value_type, NamespacedType)]@
+      @('::'.join(member.type.value_type.namespaces))::typesupport_fastrtps_cpp::cdr_deserialize(
+        cdr,
+        ros_message.@(member.name)[i]);
+@[        else]@
+      bool succeeded = rosidl_typesupport_fastrtps_cpp::cdr_deserialize(cdr, ros_message.@(member.name)[i]);
+      if (!succeeded) {
+        fprintf(stderr, "failed to deserialize u16string\n");
+        return false;
+      }
+@[        end if]@
+    }
+@[      end if]@
+@[    else]@
+@[      if not isinstance(member.type.value_type, (NamespacedType, AbstractWString)) and not isinstance(member.type, BoundedSequence)]@
+    cdr >> ros_message.@(member.name);
+@[      else]@
+    uint32_t cdrSize;
+    cdr >> cdrSize;
+    size_t size = static_cast<size_t>(cdrSize);
+
+    // Check there are at least 'size' remaining bytes in the CDR stream before resizing
+    auto old_state = cdr.get_state();
+    bool correct_size = cdr.jump(size);
+    cdr.set_state(old_state);
+    if (!correct_size) {
+      fprintf(stderr, "sequence size exceeds remaining buffer\n");
+      return false;
+    }
+
+    ros_message.@(member.name).resize(size);
+@[        if isinstance(member.type, BoundedSequence)]@
+    if (size > @(member.type.maximum_size)) {
+      throw std::runtime_error("vector size exceeds upper bound");
+    }
+@[        end if]@
+@[        if isinstance(member.type.value_type, BasicType) and member.type.value_type.typename not in ('boolean', 'wchar')]@
+    if (size > 0) {
+      cdr.deserialize_array(&(ros_message.@(member.name)[0]), size);
+    }
+@[        else]@
+    for (size_t i = 0; i < size; i++) {
+@[          if isinstance(member.type.value_type, NamespacedType)]@
+      @('::'.join(member.type.value_type.namespaces))::typesupport_fastrtps_cpp::cdr_deserialize(
+        cdr,
+        ros_message.@(member.name)[i]);
+@[          else]@
+      bool succeeded = rosidl_typesupport_fastrtps_cpp::cdr_deserialize(cdr, ros_message.@(member.name)[i]);
+      if (!succeeded) {
+        fprintf(stderr, "failed to deserialize u16string\n");
+        return false;
+      }
+@[          end if]@
+    }
+@[        end if]@
+@[      end if]@
+@[    end if]@
   }
 @[  elif isinstance(member.type, BasicType) and member.type.typename == 'boolean']@
   cdr >> ros_message.@(member.name);
