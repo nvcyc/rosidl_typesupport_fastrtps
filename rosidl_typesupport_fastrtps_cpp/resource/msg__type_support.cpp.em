@@ -363,14 +363,26 @@ cdr_deserialize_with_locality(
   @('::'.join([package_name] + list(interface_path.parents[0].parts) + [message.structure.namespaced_type.name])) & ros_message,
   rmw_endpoint_locality_t locality)
 {
+  std::cerr << "[cdr_deserialize_with_locality] Starting deserialization for @(message.structure.namespaced_type.name), locality=" << locality << "\n";
+  std::cerr << "[cdr_deserialize_with_locality] CDR position at start: " << cdr.get_current_position() << "\n";
+  
   // Deserialize all fields, using locality-aware deserialization for Buffer fields (UnboundedSequence)
 @[for member in message.structure.members]@
   // Member: @(member.name)
 @[  if isinstance(member.type, UnboundedSequence)]@
   {
-    // Buffer field (UnboundedSequence -> Buffer<T>): use locality-aware deserialization
-    rosidl_typesupport_fastrtps_cpp::deserialize_buffer_with_locality(
-      cdr, ros_message.@(member.name), locality);
+    std::cerr << "[cdr_deserialize_with_locality] About to deserialize Buffer field '@(member.name)'\n";
+    std::cerr << "[cdr_deserialize_with_locality] CDR position before '@(member.name)': " << cdr.get_current_position() << "\n";
+    try {
+      // Buffer field (UnboundedSequence -> Buffer<T>): use locality-aware deserialization
+      rosidl_typesupport_fastrtps_cpp::deserialize_buffer_with_locality(
+        cdr, ros_message.@(member.name), locality);
+      std::cerr << "[cdr_deserialize_with_locality] Successfully deserialized Buffer field '@(member.name)'\n";
+      std::cerr << "[cdr_deserialize_with_locality] CDR position after '@(member.name)': " << cdr.get_current_position() << "\n";
+    } catch (const std::exception & e) {
+      std::cerr << "[cdr_deserialize_with_locality] EXCEPTION deserializing '@(member.name)': " << e.what() << "\n";
+      throw;
+    }
   }
 @[  elif isinstance(member.type, AbstractNestedType)]@
   {
@@ -438,15 +450,18 @@ cdr_deserialize_with_locality(
 @[    end if]@
   }
 @[  elif isinstance(member.type, BasicType) and member.type.typename == 'boolean']@
+  std::cerr << "[cdr_deserialize_with_locality] Deserializing boolean '@(member.name)' at position " << cdr.get_current_position() << "\n";
   cdr >> ros_message.@(member.name);
 @[  elif isinstance(member.type, BasicType) and member.type.typename == 'wchar']@
   {
+    std::cerr << "[cdr_deserialize_with_locality] Deserializing wchar '@(member.name)' at position " << cdr.get_current_position() << "\n";
     uint16_t wchar_value;
     cdr >> wchar_value;
     ros_message.@(member.name) = static_cast<wchar_t>(wchar_value);
   }
 @[  elif isinstance(member.type, AbstractWString)]@
   {
+    std::cerr << "[cdr_deserialize_with_locality] Deserializing wstring '@(member.name)' at position " << cdr.get_current_position() << "\n";
     bool succeeded = rosidl_typesupport_fastrtps_cpp::cdr_deserialize(cdr, ros_message.@(member.name));
     if (!succeeded) {
       fprintf(stderr, "failed to deserialize u16string\n");
@@ -454,8 +469,10 @@ cdr_deserialize_with_locality(
     }
   }
 @[  elif not isinstance(member.type, NamespacedType)]@
+  std::cerr << "[cdr_deserialize_with_locality] Deserializing field '@(member.name)' at position " << cdr.get_current_position() << "\n";
   cdr >> ros_message.@(member.name);
 @[  else]@
+  std::cerr << "[cdr_deserialize_with_locality] Deserializing NamespacedType '@(member.name)' at position " << cdr.get_current_position() << "\n";
   @('::'.join(member.type.namespaces))::typesupport_fastrtps_cpp::cdr_deserialize(
     cdr,
     ros_message.@(member.name));
