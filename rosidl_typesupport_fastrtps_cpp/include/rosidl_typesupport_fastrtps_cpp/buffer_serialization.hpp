@@ -26,7 +26,7 @@
 #include "rosidl_runtime_cpp/buffer.hpp"
 #include "rosidl_typesupport_fastrtps_cpp/visibility_control.h"
 #include "fastcdr/Cdr.h"
-#include "rmw/types.h"
+#include "rmw/topic_endpoint_info.h"
 
 namespace rosidl_typesupport_fastrtps_cpp
 {
@@ -42,12 +42,12 @@ struct BackendDescriptorOps
   std::function<std::shared_ptr<void>(const std::shared_ptr<void> &)> create_descriptor;
   // Create buffer impl from descriptor
   std::function<std::shared_ptr<void>(const std::shared_ptr<void> &)> from_descriptor;
-  // Create descriptor with locality awareness
+  // Create descriptor with endpoint awareness
   std::function<std::shared_ptr<void>(const std::shared_ptr<void> &,
-    rmw_endpoint_locality_t)> create_descriptor_with_locality;
-  // Create buffer impl from descriptor with locality awareness
+    const rmw_topic_endpoint_info_t &)> create_descriptor_with_endpoint;
+  // Create buffer impl from descriptor with endpoint awareness
   std::function<std::shared_ptr<void>(const std::shared_ptr<void> &,
-    rmw_endpoint_locality_t)> from_descriptor_with_locality;
+    const rmw_topic_endpoint_info_t &)> from_descriptor_with_endpoint;
   // Descriptor type name (e.g., "cuda_buffer_msgs::msg::CudaBufferDescriptor")
   std::string descriptor_type_name;
 };
@@ -75,6 +75,18 @@ inline std::unordered_map<std::string, DescriptorSerializers> & get_descriptor_s
 {
   static std::unordered_map<std::string, DescriptorSerializers> serializers;
   return serializers;
+}
+
+/// Resolver for endpoint/backend compatibility (optional).
+using EndpointCompatibilityResolver =
+  std::function<bool(const rmw_topic_endpoint_info_t &, const std::string &)>;
+
+/// Get global endpoint compatibility resolver.
+ROSIDL_TYPESUPPORT_FASTRTPS_CPP_PUBLIC
+inline EndpointCompatibilityResolver & get_endpoint_compatibility_resolver()
+{
+  static EndpointCompatibilityResolver resolver;
+  return resolver;
 }
 
 /// Helper macro to register FastCDR serialization functions for a buffer descriptor message.
@@ -144,34 +156,46 @@ inline size_t get_buffer_serialized_size(
   return current_alignment - initial_alignment;
 }
 
-/// Serialize Buffer<T> with locality awareness.
-/// Calls locality-specific descriptor creation for optimization.
+/// Serialize Buffer<T> with endpoint awareness.
+/// Calls endpoint-specific descriptor creation for optimization.
 template<typename T, typename Allocator>
-inline void serialize_buffer_with_locality(
+inline void serialize_buffer_with_endpoint(
   eprosima::fastcdr::Cdr & cdr,
   const rosidl_runtime_cpp::Buffer<T, Allocator> & buffer,
-  rmw_endpoint_locality_t locality)
+  const rmw_topic_endpoint_info_t & endpoint_info)
 {
   const std::string backend_type = buffer.get_backend_type();
 
-  std::cerr << "[serialize_buffer_with_locality] Backend: " << backend_type
+  std::cerr << "[serialize_buffer_with_endpoint] Backend: " << backend_type
             << ", buffer size: " << buffer.size() << " elements\n";
 
-  // Serialize backend type first (for all backends)
-  cdr << backend_type;
-  std::cerr << "[serialize_buffer_with_locality] Wrote backend_type string\n";
+  bool force_cpu = false;
+  auto & compat_resolver = get_endpoint_compatibility_resolver();
+  if (compat_resolver && backend_type != "cpu") {
+    force_cpu = !compat_resolver(endpoint_info, backend_type);
+  }
 
-  // CPU backend: serialize directly as std::vector (locality doesn't affect CPU)
-  if (backend_type == "cpu") {
-    const std::vector<T> & vec = buffer;
-    std::cerr << "[serialize_buffer_with_locality] Writing vector of " << vec.size() <<
+  // Serialize backend type first (for all backends)
+  if (force_cpu) {
+    cdr << std::string("cpu");
+    std::cerr << "[serialize_buffer_with_endpoint] Forcing CPU serialization for backend '"
+              << backend_type << "'\n";
+  } else {
+    cdr << backend_type;
+  }
+  std::cerr << "[serialize_buffer_with_endpoint] Wrote backend_type string\n";
+
+  // CPU backend (or forced CPU): serialize directly as std::vector
+  if (backend_type == "cpu" || force_cpu) {
+    std::vector<T> vec = buffer.to_vector();
+    std::cerr << "[serialize_buffer_with_endpoint] Writing vector of " << vec.size() <<
       " elements\n";
     cdr << vec;
-    std::cerr << "[serialize_buffer_with_locality] Vector written successfully\n";
+    std::cerr << "[serialize_buffer_with_endpoint] Vector written successfully\n";
     return;
   }
 
-  // Vendor backends: use locality-aware descriptor approach
+  // Vendor backends: use endpoint-aware descriptor approach
   const std::string element_type_id = typeid(T).name();
   cdr << element_type_id;
 
@@ -199,13 +223,13 @@ inline void serialize_buffer_with_locality(
   // Serialize descriptor type name
   cdr << ops_it->second.descriptor_type_name;
 
-  // Create descriptor with locality awareness
+  // Create descriptor with endpoint awareness
   auto * non_const_impl = const_cast<rosidl_runtime_cpp::BufferImplBase<T> *>(impl);
   std::shared_ptr<void> impl_shared(static_cast<void *>(non_const_impl), [](void *){});
 
   std::shared_ptr<void> descriptor;
-  if (ops_it->second.create_descriptor_with_locality) {
-    descriptor = ops_it->second.create_descriptor_with_locality(impl_shared, locality);
+  if (ops_it->second.create_descriptor_with_endpoint) {
+    descriptor = ops_it->second.create_descriptor_with_endpoint(impl_shared, endpoint_info);
   } else {
     descriptor = ops_it->second.create_descriptor(impl_shared);
   }
@@ -214,36 +238,36 @@ inline void serialize_buffer_with_locality(
   ser_it->second.serialize(cdr, descriptor);
 }
 
-/// Deserialize Buffer<T> with locality awareness.
+/// Deserialize Buffer<T> with endpoint awareness.
 template<typename T, typename Allocator>
-inline void deserialize_buffer_with_locality(
+inline void deserialize_buffer_with_endpoint(
   eprosima::fastcdr::Cdr & cdr,
   rosidl_runtime_cpp::Buffer<T, Allocator> & buffer,
-  rmw_endpoint_locality_t locality)
+  const rmw_topic_endpoint_info_t & endpoint_info)
 {
-  std::cerr << "[deserialize_buffer_with_locality] Starting deserialization...\n";
+  std::cerr << "[deserialize_buffer_with_endpoint] Starting deserialization...\n";
 
   // Deserialize backend type first
   std::string backend_type;
   try {
     cdr >> backend_type;
-    std::cerr << "[deserialize_buffer_with_locality] Read backend_type: '" << backend_type << "'\n";
+    std::cerr << "[deserialize_buffer_with_endpoint] Read backend_type: '" << backend_type << "'\n";
   } catch (const std::exception & e) {
-    std::cerr << "[deserialize_buffer_with_locality] EXCEPTION reading backend_type: " <<
+    std::cerr << "[deserialize_buffer_with_endpoint] EXCEPTION reading backend_type: " <<
       e.what() << "\n";
     throw;
   }
 
   // CPU backend: deserialize directly from std::vector
   if (backend_type == "cpu") {
-    std::cerr << "[deserialize_buffer_with_locality] CPU backend, reading vector...\n";
+    std::cerr << "[deserialize_buffer_with_endpoint] CPU backend, reading vector...\n";
     std::vector<T> vec;
     try {
       cdr >> vec;
-      std::cerr << "[deserialize_buffer_with_locality] Read vector of " << vec.size() <<
+      std::cerr << "[deserialize_buffer_with_endpoint] Read vector of " << vec.size() <<
         " elements\n";
     } catch (const std::exception & e) {
-      std::cerr << "[deserialize_buffer_with_locality] EXCEPTION reading vector: " << e.what() <<
+      std::cerr << "[deserialize_buffer_with_endpoint] EXCEPTION reading vector: " << e.what() <<
         "\n";
       throw;
     }
@@ -252,11 +276,11 @@ inline void deserialize_buffer_with_locality(
     for (size_t i = 0; i < vec.size(); ++i) {
       buffer[i] = vec[i];
     }
-    std::cerr << "[deserialize_buffer_with_locality] Buffer populated successfully\n";
+    std::cerr << "[deserialize_buffer_with_endpoint] Buffer populated successfully\n";
     return;
   } else {
-    // Vendor backends: use locality-aware descriptor approach
-    std::cerr << "[deserialize_buffer_with_locality] Vendor backend: " << backend_type << "\n";
+    // Vendor backends: use endpoint-aware descriptor approach
+    std::cerr << "[deserialize_buffer_with_endpoint] Vendor backend: " << backend_type << "\n";
     std::string element_type_id;
     std::string descriptor_type_name;
 
@@ -289,10 +313,10 @@ inline void deserialize_buffer_with_locality(
     // Deserialize descriptor
     auto descriptor = ser_it->second.deserialize(cdr);
 
-    // Create buffer implementation with locality awareness
+    // Create buffer implementation with endpoint awareness
     std::shared_ptr<void> impl_shared;
-    if (ops_it->second.from_descriptor_with_locality) {
-      impl_shared = ops_it->second.from_descriptor_with_locality(descriptor, locality);
+    if (ops_it->second.from_descriptor_with_endpoint) {
+      impl_shared = ops_it->second.from_descriptor_with_endpoint(descriptor, endpoint_info);
     } else {
       impl_shared = ops_it->second.from_descriptor(descriptor);
     }
