@@ -38,10 +38,6 @@ namespace rosidl_typesupport_fastrtps_cpp
 /// Backend descriptor operations (technology-independent, provided by backend)
 struct BackendDescriptorOps
 {
-  // Create descriptor from buffer impl
-  std::function<std::shared_ptr<void>(const std::shared_ptr<void> &)> create_descriptor;
-  // Create buffer impl from descriptor
-  std::function<std::shared_ptr<void>(const std::shared_ptr<void> &)> from_descriptor;
   // Create descriptor with endpoint awareness
   std::function<std::shared_ptr<void>(const std::shared_ptr<void> &,
     const rmw_topic_endpoint_info_t &)> create_descriptor_with_endpoint;
@@ -169,6 +165,8 @@ inline void serialize_buffer_with_endpoint(
   std::cerr << "[serialize_buffer_with_endpoint] Backend: " << backend_type
             << ", buffer size: " << buffer.size() << " elements\n";
 
+  std::cerr << "[serialize_buffer_with_endpoint] hihi\n";
+
   bool force_cpu = false;
   auto & compat_resolver = get_endpoint_compatibility_resolver();
   if (compat_resolver && backend_type != "cpu") {
@@ -186,7 +184,10 @@ inline void serialize_buffer_with_endpoint(
   std::cerr << "[serialize_buffer_with_endpoint] Wrote backend_type string\n";
 
   // CPU backend (or forced CPU): serialize directly as std::vector
+  std::cerr << "[serialize_buffer_with_endpoint] Checking if CPU path: backend_type='" <<
+    backend_type << "', force_cpu=" << force_cpu << "\n";
   if (backend_type == "cpu" || force_cpu) {
+    std::cerr << "[serialize_buffer_with_endpoint] Taking CPU path, converting to vector...\n";
     std::vector<T> vec = buffer.to_vector();
     std::cerr << "[serialize_buffer_with_endpoint] Writing vector of " << vec.size() <<
       " elements\n";
@@ -196,46 +197,62 @@ inline void serialize_buffer_with_endpoint(
   }
 
   // Vendor backends: use endpoint-aware descriptor approach
+  std::cerr << "[serialize_buffer_with_endpoint] Taking vendor backend path...\n";
+  std::cerr << "[serialize_buffer_with_endpoint] Getting element type id...\n";
   const std::string element_type_id = typeid(T).name();
+  std::cerr << "[serialize_buffer_with_endpoint] Element type: " << element_type_id << "\n";
   cdr << element_type_id;
+  std::cerr << "[serialize_buffer_with_endpoint] Element type written\n";
 
+  std::cerr << "[serialize_buffer_with_endpoint] Getting buffer impl...\n";
   const auto * impl = buffer.get_impl();
   if (!impl) {
+    std::cerr << "[serialize_buffer_with_endpoint] ERROR: Buffer implementation is null!\n";
     throw std::runtime_error("Buffer implementation is null");
   }
+  std::cerr << "[serialize_buffer_with_endpoint] Buffer impl obtained\n";
 
   // Get backend descriptor operations
+  std::cerr << "[serialize_buffer_with_endpoint] Getting backend descriptor ops...\n";
   auto & backend_ops = get_backend_descriptor_ops();
   auto ops_it = backend_ops.find(backend_type);
   if (ops_it == backend_ops.end()) {
+    std::cerr << "[serialize_buffer_with_endpoint] ERROR: Backend not registered!\n";
     throw std::runtime_error(
       "No backend registered for type: " + backend_type);
   }
+  std::cerr << "[serialize_buffer_with_endpoint] Backend ops found\n";
 
   // Get FastCDR serializers
+  std::cerr << "[serialize_buffer_with_endpoint] Getting FastCDR serializers...\n";
   auto & serializers = get_descriptor_serializers();
   auto ser_it = serializers.find(backend_type);
   if (ser_it == serializers.end()) {
+    std::cerr << "[serialize_buffer_with_endpoint] ERROR: Serializers not registered!\n";
     throw std::runtime_error(
       "FastCDR serializers not registered for backend: " + backend_type);
   }
+  std::cerr << "[serialize_buffer_with_endpoint] Serializers found\n";
 
   // Serialize descriptor type name
+  std::cerr << "[serialize_buffer_with_endpoint] Writing descriptor type name: " <<
+    ops_it->second.descriptor_type_name << "\n";
   cdr << ops_it->second.descriptor_type_name;
+  std::cerr << "[serialize_buffer_with_endpoint] Descriptor type name written\n";
 
   // Create descriptor with endpoint awareness
+  std::cerr << "[serialize_buffer_with_endpoint] Creating descriptor...\n";
   auto * non_const_impl = const_cast<rosidl_runtime_cpp::BufferImplBase<T> *>(impl);
   std::shared_ptr<void> impl_shared(static_cast<void *>(non_const_impl), [](void *){});
 
-  std::shared_ptr<void> descriptor;
-  if (ops_it->second.create_descriptor_with_endpoint) {
-    descriptor = ops_it->second.create_descriptor_with_endpoint(impl_shared, endpoint_info);
-  } else {
-    descriptor = ops_it->second.create_descriptor(impl_shared);
-  }
+  std::cerr << "[serialize_buffer_with_endpoint] Calling create_descriptor_with_endpoint...\n";
+  auto descriptor = ops_it->second.create_descriptor_with_endpoint(impl_shared, endpoint_info);
+  std::cerr << "[serialize_buffer_with_endpoint] Descriptor created\n";
 
   // Serialize descriptor
+  std::cerr << "[serialize_buffer_with_endpoint] Serializing descriptor...\n";
   ser_it->second.serialize(cdr, descriptor);
+  std::cerr << "[serialize_buffer_with_endpoint] Descriptor serialized successfully\n";
 }
 
 /// Deserialize Buffer<T> with endpoint awareness.
@@ -286,6 +303,8 @@ inline void deserialize_buffer_with_endpoint(
 
     cdr >> element_type_id;
     cdr >> descriptor_type_name;
+    std::cerr << "[deserialize_buffer_with_endpoint] element_type_id: '" << element_type_id <<
+      "', descriptor_type_name: '" << descriptor_type_name << "'\n";
 
     // Validate element type
     if (element_type_id != typeid(T).name()) {
@@ -314,12 +333,7 @@ inline void deserialize_buffer_with_endpoint(
     auto descriptor = ser_it->second.deserialize(cdr);
 
     // Create buffer implementation with endpoint awareness
-    std::shared_ptr<void> impl_shared;
-    if (ops_it->second.from_descriptor_with_endpoint) {
-      impl_shared = ops_it->second.from_descriptor_with_endpoint(descriptor, endpoint_info);
-    } else {
-      impl_shared = ops_it->second.from_descriptor(descriptor);
-    }
+    auto impl_shared = ops_it->second.from_descriptor_with_endpoint(descriptor, endpoint_info);
 
     // Wrap implementation in Buffer
     auto typed_impl_shared =
@@ -412,13 +426,17 @@ inline Cdr & operator<<(Cdr & cdr, const rosidl_runtime_cpp::Buffer<T, Allocator
   std::cerr << "[Buffer Serialization] Descriptor type name serialized\n";
 
   // Create descriptor from buffer implementation
-  // Wrap raw pointer in shared_ptr with no-op deleter since Buffer owns the impl via unique_ptr
-  std::cerr << "[Buffer Serialization] Creating descriptor from impl\n";
+  // Note: This legacy path doesn't have endpoint info, so create a dummy endpoint
+  std::cerr <<
+        "[Buffer Serialization] Creating descriptor from impl (legacy path with dummy endpoint)\n";
+  rmw_topic_endpoint_info_t dummy_endpoint{};
+  memset(&dummy_endpoint, 0, sizeof(rmw_topic_endpoint_info_t));
+
   // Remove const and wrap in shared_ptr with no-op deleter
   auto * non_const_impl = const_cast<rosidl_runtime_cpp::BufferImplBase<T> *>(impl);
   std::shared_ptr<void> impl_shared(static_cast<void *>(non_const_impl), [](void *){/* no-op deleter */
     });
-  auto descriptor = ops_it->second.create_descriptor(impl_shared);
+  auto descriptor = ops_it->second.create_descriptor_with_endpoint(impl_shared, dummy_endpoint);
   std::cerr << "[Buffer Serialization] Descriptor created\n";
 
   // Serialize descriptor using registered FastCDR function
@@ -509,8 +527,13 @@ inline Cdr & operator>>(Cdr & cdr, rosidl_runtime_cpp::Buffer<T, Allocator> & bu
   std::cerr << "[Buffer Deserialization] Descriptor message deserialized\n";
 
   // Create buffer implementation from descriptor (returns shared_ptr)
-  std::cerr << "[Buffer Deserialization] Creating buffer impl from descriptor\n";
-  auto impl_shared = ops_it->second.from_descriptor(descriptor);
+  // Note: This legacy path doesn't have endpoint info, so create a dummy endpoint
+  std::cerr <<
+        "[Buffer Deserialization] Creating buffer impl from descriptor (legacy path with dummy endpoint)\n";
+  rmw_topic_endpoint_info_t dummy_endpoint{};
+  memset(&dummy_endpoint, 0, sizeof(rmw_topic_endpoint_info_t));
+
+  auto impl_shared = ops_it->second.from_descriptor_with_endpoint(descriptor, dummy_endpoint);
   std::cerr << "[Buffer Deserialization] Buffer impl created from descriptor\n";
 
   // Cast to correct type
