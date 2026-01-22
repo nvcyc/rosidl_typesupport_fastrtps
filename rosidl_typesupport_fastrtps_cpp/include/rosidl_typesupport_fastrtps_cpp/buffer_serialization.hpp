@@ -165,8 +165,6 @@ inline void serialize_buffer_with_endpoint(
   std::cerr << "[serialize_buffer_with_endpoint] Backend: " << backend_type
             << ", buffer size: " << buffer.size() << " elements\n";
 
-  std::cerr << "[serialize_buffer_with_endpoint] hihi\n";
-
   bool force_cpu = false;
   auto & compat_resolver = get_endpoint_compatibility_resolver();
   if (compat_resolver && backend_type != "cpu") {
@@ -330,18 +328,27 @@ inline void deserialize_buffer_with_endpoint(
     }
 
     // Deserialize descriptor
+    std::cerr << "[deserialize_buffer_with_endpoint] About to deserialize descriptor\n";
     auto descriptor = ser_it->second.deserialize(cdr);
+    std::cerr << "[deserialize_buffer_with_endpoint] Descriptor deserialized\n";
 
     // Create buffer implementation with endpoint awareness
+    std::cerr << "[deserialize_buffer_with_endpoint] Calling from_descriptor_with_endpoint\n";
     auto impl_shared = ops_it->second.from_descriptor_with_endpoint(descriptor, endpoint_info);
+    std::cerr << "[deserialize_buffer_with_endpoint] from_descriptor_with_endpoint returned\n";
 
     // Wrap implementation in Buffer
+    std::cerr << "[deserialize_buffer_with_endpoint] Casting to typed impl\n";
     auto typed_impl_shared =
       std::static_pointer_cast<rosidl_runtime_cpp::BufferImplBase<T>>(impl_shared);
+    std::cerr << "[deserialize_buffer_with_endpoint] Calling clone()\n";
     std::unique_ptr<rosidl_runtime_cpp::BufferImplBase<T>> typed_impl_unique =
       typed_impl_shared->clone();
+    std::cerr << "[deserialize_buffer_with_endpoint] clone() returned\n";
 
+    std::cerr << "[deserialize_buffer_with_endpoint] Setting buffer impl\n";
     buffer.set_impl(std::move(typed_impl_unique), backend_type);
+    std::cerr << "[deserialize_buffer_with_endpoint] Buffer impl set successfully\n";
   }
 }
 
