@@ -29,15 +29,18 @@ find_package(ament_cmake_python REQUIRED)
 
 find_package(rmw REQUIRED)
 find_package(rosidl_runtime_c REQUIRED)
+find_package(rosidl_runtime_cpp REQUIRED)
 
 ament_export_dependencies(rmw)
 ament_export_dependencies(rosidl_runtime_c)
+ament_export_dependencies(rosidl_runtime_cpp)
 ament_export_dependencies(fastcdr)
 
 ament_python_install_package(${PROJECT_NAME})
 
 add_library(${PROJECT_NAME}
-  src/identifier.cpp)
+  src/identifier.cpp
+  src/buffer_serialization_instantiations.cpp)
 set_property(TARGET ${PROJECT_NAME}
   PROPERTY DEFINE_SYMBOL "ROSIDL_TYPESUPPORT_FASTRTPS_CPP_BUILDING_DLL")
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -46,6 +49,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 target_link_libraries(${PROJECT_NAME} PUBLIC
   fastcdr
   rosidl_runtime_c::rosidl_runtime_c
+  rosidl_runtime_cpp::rosidl_runtime_cpp
   rmw::rmw)
 
 # Export old-style CMake variables
