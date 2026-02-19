@@ -66,15 +66,7 @@ if has_buffer_fields:
 #include "@(header_file)"
 @[    end if]@
 @[end for]@
-@[if has_buffer_fields]@
-
-// Sentinel value for buffer-backed uint8[] sequences.
-// When capacity == this value, the data pointer holds a rcl_buffer::Buffer<uint8_t>*
-// instead of a malloc'd byte array. SIZE_MAX can never occur from a real allocation.
-#ifndef RCL_BUFFER_SENTINEL_CAPACITY
-#define RCL_BUFFER_SENTINEL_CAPACITY ((size_t)-1)
-#endif
-@[end if]@
+@# Buffer-backed uint8[] fields use the is_rcl_buffer flag on the sequence struct.
 
 #ifndef _WIN32
 # pragma GCC diagnostic push
@@ -925,7 +917,7 @@ static size_t _@(message.structure.namespaced_type.name)__max_serialized_size(ch
 @[if has_buffer_fields]@
 // Endpoint-aware serialization for C messages with Buffer fields.
 // Uses the same per-field serialization as the regular path, but for uint8[] fields
-// checks the buffer sentinel to detect rcl_buffer::Buffer<uint8_t>*.
+// checks the is_rcl_buffer flag to detect rcl_buffer::Buffer<uint8_t>*.
 static bool _@(message.structure.namespaced_type.name)__cdr_serialize_with_endpoint(
   const void * untyped_ros_message,
   eprosima::fastcdr::Cdr & cdr,
@@ -942,8 +934,7 @@ static bool _@(message.structure.namespaced_type.name)__cdr_serialize_with_endpo
 @[    if isinstance(member.type, UnboundedSequence) and isinstance(member.type.value_type, BasicType) and member.type.value_type.typename == 'uint8']@
   // Field name: @(member.name) (buffer-aware)
   {
-    if (ros_message->@(member.name).capacity == RCL_BUFFER_SENTINEL_CAPACITY) {
-      // Sentinel set: data is a rcl_buffer::Buffer<uint8_t>*
+    if (ros_message->@(member.name).is_rcl_buffer) {
       auto * buffer = reinterpret_cast<const rcl_buffer::Buffer<uint8_t> *>(
         ros_message->@(member.name).data);
       rosidl_typesupport_fastrtps_cpp::serialize_buffer_with_endpoint(
@@ -972,7 +963,7 @@ static bool _@(message.structure.namespaced_type.name)__cdr_serialize_with_endpo
 
 // Endpoint-aware deserialization for C messages with Buffer fields.
 // For vendor-backed buffer data, creates a heap-allocated rcl_buffer::Buffer<uint8_t>
-// and sets the sentinel on the C sequence struct.
+// and sets is_rcl_buffer on the C sequence struct.
 static bool _@(message.structure.namespaced_type.name)__cdr_deserialize_with_endpoint(
   eprosima::fastcdr::Cdr & cdr,
   void * untyped_ros_message,
@@ -989,7 +980,7 @@ static bool _@(message.structure.namespaced_type.name)__cdr_deserialize_with_end
 @[    if isinstance(member.type, UnboundedSequence) and isinstance(member.type.value_type, BasicType) and member.type.value_type.typename == 'uint8']@
   // Field name: @(member.name) (buffer-aware)
   {
-    // Deserialize into a temporary Buffer, then decide: sentinel or copy
+    // Deserialize into a temporary Buffer, then decide: is_rcl_buffer or copy
     auto * buffer = new rcl_buffer::Buffer<uint8_t>();
     try {
       rosidl_typesupport_fastrtps_cpp::deserialize_buffer_with_endpoint(
@@ -1001,10 +992,10 @@ static bool _@(message.structure.namespaced_type.name)__cdr_deserialize_with_end
     }
 
     if (buffer->get_backend_type() != "cpu") {
-      // Vendor backend: set sentinel so Python receives the Buffer object
       ros_message->@(member.name).data = reinterpret_cast<uint8_t *>(buffer);
       ros_message->@(member.name).size = buffer->size();
-      ros_message->@(member.name).capacity = RCL_BUFFER_SENTINEL_CAPACITY;
+      ros_message->@(member.name).capacity = 0;
+      ros_message->@(member.name).is_rcl_buffer = true;
     } else {
       // CPU backend: copy into normal sequence (backward compatible)
       size_t buf_size = buffer->size();
