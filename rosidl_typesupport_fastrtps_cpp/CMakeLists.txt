@@ -87,6 +87,14 @@ if(BUILD_TESTING)
 
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_cli_extension test/test_cli_extension.py)
+
+  ament_add_gtest(test_buffer_wire_compat
+    test/test_buffer_wire_compat.cpp)
+  if(TARGET test_buffer_wire_compat)
+    target_link_libraries(test_buffer_wire_compat
+      ${PROJECT_NAME}
+      fastcdr)
+  endif()
 endif()
 
 ament_package(

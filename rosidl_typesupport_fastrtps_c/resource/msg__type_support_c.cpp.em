@@ -940,9 +940,8 @@ static bool _@(message.structure.namespaced_type.name)__cdr_serialize_with_endpo
       rosidl_typesupport_fastrtps_cpp::serialize_buffer_with_endpoint(
         cdr, *buffer, endpoint_info);
     } else {
-      // Normal sequence: serialize in buffer-aware format with "cpu" prefix
-      // so that deserialize_buffer_with_endpoint() can read backend_type consistently
-      cdr << std::string("cpu");
+      // Normal sequence: serialize as legacy uint8[] wire format
+      // (uint32 size + raw bytes) for strict compatibility.
       size_t size = ros_message->@(member.name).size;
       cdr << static_cast<uint32_t>(size);
       if (size > 0) {
