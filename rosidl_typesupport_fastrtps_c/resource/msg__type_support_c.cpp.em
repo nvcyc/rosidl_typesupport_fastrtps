@@ -230,6 +230,7 @@ def generate_member_for_cdr_serialize(member, suffix):
   from rosidl_parser.definition import BasicType
   from rosidl_parser.definition import BoundedSequence
   from rosidl_parser.definition import NamespacedType
+  from rosidl_parser.definition import UnboundedSequence
   strlist = []
   strlist.append('// Field name: %s' % (member.name))
   strlist.append('{')
@@ -238,7 +239,30 @@ def generate_member_for_cdr_serialize(member, suffix):
   if isinstance(type_, AbstractNestedType):
     type_ = type_.value_type
 
-  if isinstance(member.type, AbstractNestedType):
+  if (
+    suffix == '' and
+    isinstance(member.type, UnboundedSequence) and
+    isinstance(member.type.value_type, BasicType) and
+    member.type.value_type.typename == 'uint8'
+  ):
+    strlist.append('  // Regular path CPU fallback for rcl_buffer-backed uint8[]')
+    strlist.append('  if (ros_message->%s.is_rcl_buffer) {' % (member.name))
+    strlist.append(
+      '    auto * buffer = reinterpret_cast<const rcl_buffer::Buffer<uint8_t> *>(ros_message->%s.data);' %
+      (member.name))
+    strlist.append('    if (buffer == nullptr) {')
+    strlist.append('      fprintf(stderr, "null rcl_buffer pointer for field \'%s\'\\n");' % (member.name))
+    strlist.append('      return false;')
+    strlist.append('    }')
+    strlist.append('    const std::vector<uint8_t> vec = buffer->to_vector();')
+    strlist.append('    cdr << vec;')
+    strlist.append('  } else {')
+    strlist.append('    size_t size = ros_message->%s.size;' % (member.name))
+    strlist.append('    auto array_ptr = ros_message->%s.data;' % (member.name))
+    strlist.append('    cdr << static_cast<uint32_t>(size);')
+    strlist.append('    cdr.serialize_array(array_ptr, size);')
+    strlist.append('  }')
+  elif isinstance(member.type, AbstractNestedType):
     if isinstance(member.type, Array):
       strlist.append('  size_t size = %d;' % (member.type.size))
       strlist.append('  auto array_ptr = ros_message->%s;' % (member.name))
@@ -328,6 +352,7 @@ def generate_member_for_cdr_deserialize(member):
   from rosidl_parser.definition import BasicType
   from rosidl_parser.definition import BoundedSequence
   from rosidl_parser.definition import NamespacedType
+  from rosidl_parser.definition import UnboundedSequence
   strlist = []
   strlist.append('// Field name: %s' % (member.name))
   strlist.append('{')
@@ -336,7 +361,38 @@ def generate_member_for_cdr_deserialize(member):
   if isinstance(type_, AbstractNestedType):
     type_ = type_.value_type
 
-  if isinstance(member.type, AbstractNestedType):
+  if (
+    isinstance(member.type, UnboundedSequence) and
+    isinstance(member.type.value_type, BasicType) and
+    member.type.value_type.typename == 'uint8'
+  ):
+    strlist.append('  // Regular path CPU fallback for rcl_buffer-backed uint8[]')
+    strlist.append('  if (ros_message->%s.is_rcl_buffer) {' % member.name)
+    strlist.append(
+      '    auto * old_buffer = reinterpret_cast<rcl_buffer::Buffer<uint8_t> *>(ros_message->%s.data);' %
+      member.name)
+    strlist.append('    delete old_buffer;')
+    strlist.append('    ros_message->%s.data = nullptr;' % member.name)
+    strlist.append('    ros_message->%s.size = 0;' % member.name)
+    strlist.append('    ros_message->%s.capacity = 0;' % member.name)
+    strlist.append('    ros_message->%s.is_rcl_buffer = false;' % member.name)
+    strlist.append('  }')
+    strlist.append('  std::vector<uint8_t> vec;')
+    strlist.append('  cdr >> vec;')
+    strlist.append('  size_t size = vec.size();')
+    strlist.append('  if (ros_message->%s.data) {' % member.name)
+    strlist.append('    rosidl_runtime_c__uint8__Sequence__fini(&ros_message->%s);' % member.name)
+    strlist.append('  }')
+    strlist.append('  if (!rosidl_runtime_c__uint8__Sequence__init(&ros_message->%s, size)) {' % member.name)
+    strlist.append('    fprintf(stderr, "failed to create array for field \'%s\'");' % member.name)
+    strlist.append('    return false;')
+    strlist.append('  }')
+    strlist.append('  auto array_ptr = ros_message->%s.data;' % member.name)
+    strlist.append('  for (size_t i = 0; i < size; ++i) {')
+    strlist.append('    array_ptr[i] = vec[i];')
+    strlist.append('  }')
+    strlist.append('  ros_message->%s.is_rcl_buffer = false;' % member.name)
+  elif isinstance(member.type, AbstractNestedType):
     if isinstance(member.type, Array):
       strlist.append('  size_t size = %d;' % (member.type.size))
       strlist.append('  auto array_ptr = ros_message->%s;' % (member.name))
