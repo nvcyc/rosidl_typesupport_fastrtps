@@ -77,18 +77,6 @@ inline std::unordered_map<std::string, DescriptorSerializers> & get_descriptor_s
   return serializers;
 }
 
-/// Resolver for endpoint/backend compatibility (optional).
-using EndpointCompatibilityResolver =
-  std::function<bool(const rmw_topic_endpoint_info_t &, const std::string &)>;
-
-/// Get global endpoint compatibility resolver.
-ROSIDL_TYPESUPPORT_FASTRTPS_CPP_PUBLIC
-inline EndpointCompatibilityResolver & get_endpoint_compatibility_resolver()
-{
-  static EndpointCompatibilityResolver resolver;
-  return resolver;
-}
-
 /// Marker format for descriptor-backed Buffer payloads:
 /// - CPU/legacy vector path starts with plain sequence length (high bit clear).
 /// - Descriptor path starts with a marker whose high bit is set.
@@ -192,6 +180,8 @@ inline size_t get_buffer_serialized_size(
 
 /// Serialize Buffer<T> with endpoint awareness.
 /// Calls endpoint-specific descriptor creation for optimization.
+/// If the backend returns nullptr from create_descriptor_with_endpoint(), the buffer
+/// is serialized as std::vector<T> (CPU fallback) for legacy wire compatibility.
 template<typename T, typename Allocator>
 inline void serialize_buffer_with_endpoint(
   eprosima::fastcdr::Cdr & cdr,
@@ -203,19 +193,41 @@ inline void serialize_buffer_with_endpoint(
   RCUTILS_LOG_INFO_NAMED("serialize_buffer_with_endpoint",
     ("Serializing buffer (backend: " + backend_type + ")").c_str());
 
-  bool force_cpu = false;
-  auto & compat_resolver = get_endpoint_compatibility_resolver();
-  if (compat_resolver && backend_type != "cpu") {
-    force_cpu = !compat_resolver(endpoint_info, backend_type);
+  if (backend_type == "cpu") {
+    RCUTILS_LOG_INFO_NAMED("serialize_buffer_with_endpoint", "Serializing buffer as std::vector");
+    std::vector<T> vec = buffer.to_vector();
+    cdr << vec;
+    return;
   }
 
-  // CPU backend (or forced CPU): serialize directly as std::vector for legacy wire compatibility.
-  if (backend_type == "cpu" || force_cpu) {
-    if (force_cpu) {
-      RCUTILS_LOG_INFO_NAMED(
-        "serialize_buffer_with_endpoint", "Force-converting to CPU buffer for serialization");
-    }
-    RCUTILS_LOG_INFO_NAMED("serialize_buffer_with_endpoint", "Serializing buffer as std::vector");
+  const auto * impl = buffer.get_impl();
+  if (!impl) {
+    throw std::runtime_error("Buffer implementation is null");
+  }
+
+  auto & backend_ops = get_backend_descriptor_ops();
+  auto ops_it = backend_ops.find(backend_type);
+  if (ops_it == backend_ops.end()) {
+    throw std::runtime_error(
+      "No backend registered for type: " + backend_type);
+  }
+
+  auto & serializers = get_descriptor_serializers();
+  auto ser_it = serializers.find(backend_type);
+  if (ser_it == serializers.end()) {
+    throw std::runtime_error(
+      "FastCDR serializers not registered for backend: " + backend_type);
+  }
+
+  auto * non_const_impl = const_cast<rcl_buffer::BufferImplBase<T> *>(impl);
+  std::shared_ptr<void> impl_shared(static_cast<void *>(non_const_impl), [](void *){});
+
+  auto descriptor = ops_it->second.create_descriptor_with_endpoint(impl_shared, endpoint_info);
+
+  // nullptr means the backend cannot handle this endpoint — fall back to CPU wire format.
+  if (!descriptor) {
+    RCUTILS_LOG_INFO_NAMED(
+      "serialize_buffer_with_endpoint", "Backend returned null descriptor, falling back to CPU");
     std::vector<T> vec = buffer.to_vector();
     cdr << vec;
     return;
@@ -225,46 +237,13 @@ inline void serialize_buffer_with_endpoint(
   cdr << static_cast<uint32_t>(kBufferDescriptorMarker);
   cdr << backend_type;
 
-  // Vendor backends: use endpoint-aware descriptor approach
   const std::string element_type_id = typeid(T).name();
   cdr << element_type_id;
 
-  const auto * impl = buffer.get_impl();
-  if (!impl) {
-    throw std::runtime_error("Buffer implementation is null");
-  }
-
-  // Get backend descriptor operations
-  auto & backend_ops = get_backend_descriptor_ops();
-  auto ops_it = backend_ops.find(backend_type);
-  if (ops_it == backend_ops.end()) {
-    throw std::runtime_error(
-      "No backend registered for type: " + backend_type);
-  }
-
-  // Get FastCDR serializers
-  auto & serializers = get_descriptor_serializers();
-  auto ser_it = serializers.find(backend_type);
-  if (ser_it == serializers.end()) {
-    throw std::runtime_error(
-      "FastCDR serializers not registered for backend: " + backend_type);
-  }
-
-  RCUTILS_LOG_INFO_NAMED("serialize_buffer_with_endpoint",
-    ("Creating descriptor (type name: " + ops_it->second.descriptor_type_name + ")").c_str());
-
-  // Serialize descriptor type name
-  cdr << ops_it->second.descriptor_type_name;
-
-  // Create descriptor with endpoint awareness
-  auto * non_const_impl = const_cast<rcl_buffer::BufferImplBase<T> *>(impl);
-  std::shared_ptr<void> impl_shared(static_cast<void *>(non_const_impl), [](void *){});
-
-  auto descriptor = ops_it->second.create_descriptor_with_endpoint(impl_shared, endpoint_info);
-
-  // Serialize descriptor
   RCUTILS_LOG_INFO_NAMED("serialize_buffer_with_endpoint",
     ("Serializing descriptor (type name: " + ops_it->second.descriptor_type_name + ")").c_str());
+
+  cdr << ops_it->second.descriptor_type_name;
   ser_it->second.serialize(cdr, descriptor);
 }
 
