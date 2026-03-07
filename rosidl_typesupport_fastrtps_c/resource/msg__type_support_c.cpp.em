@@ -66,7 +66,7 @@ if has_buffer_fields:
 #include "@(header_file)"
 @[    end if]@
 @[end for]@
-@# Buffer-backed uint8[] fields use the is_rcl_buffer flag on the sequence struct.
+@# Buffer-backed uint8[] fields use the is_rosidl_buffer flag on the sequence struct.
 
 #ifndef _WIN32
 # pragma GCC diagnostic push
@@ -245,13 +245,13 @@ def generate_member_for_cdr_serialize(member, suffix):
     isinstance(member.type.value_type, BasicType) and
     member.type.value_type.typename == 'uint8'
   ):
-    strlist.append('  // Regular path CPU fallback for rcl_buffer-backed uint8[]')
-    strlist.append('  if (ros_message->%s.is_rcl_buffer) {' % (member.name))
+    strlist.append('  // Regular path CPU fallback for rosidl_buffer-backed uint8[]')
+    strlist.append('  if (ros_message->%s.is_rosidl_buffer) {' % (member.name))
     strlist.append(
-      '    auto * buffer = reinterpret_cast<const rcl_buffer::Buffer<uint8_t> *>(ros_message->%s.data);' %
+      '    auto * buffer = reinterpret_cast<const rosidl::Buffer<uint8_t> *>(ros_message->%s.data);' %
       (member.name))
     strlist.append('    if (buffer == nullptr) {')
-    strlist.append('      fprintf(stderr, "null rcl_buffer pointer for field \'%s\'\\n");' % (member.name))
+    strlist.append('      fprintf(stderr, "null rosidl_buffer pointer for field \'%s\'\\n");' % (member.name))
     strlist.append('      return false;')
     strlist.append('    }')
     strlist.append('    const std::vector<uint8_t> vec = buffer->to_vector();')
@@ -366,16 +366,16 @@ def generate_member_for_cdr_deserialize(member):
     isinstance(member.type.value_type, BasicType) and
     member.type.value_type.typename == 'uint8'
   ):
-    strlist.append('  // Regular path CPU fallback for rcl_buffer-backed uint8[]')
-    strlist.append('  if (ros_message->%s.is_rcl_buffer) {' % member.name)
+    strlist.append('  // Regular path CPU fallback for rosidl_buffer-backed uint8[]')
+    strlist.append('  if (ros_message->%s.is_rosidl_buffer) {' % member.name)
     strlist.append(
-      '    auto * old_buffer = reinterpret_cast<rcl_buffer::Buffer<uint8_t> *>(ros_message->%s.data);' %
+      '    auto * old_buffer = reinterpret_cast<rosidl::Buffer<uint8_t> *>(ros_message->%s.data);' %
       member.name)
     strlist.append('    delete old_buffer;')
     strlist.append('    ros_message->%s.data = nullptr;' % member.name)
     strlist.append('    ros_message->%s.size = 0;' % member.name)
     strlist.append('    ros_message->%s.capacity = 0;' % member.name)
-    strlist.append('    ros_message->%s.is_rcl_buffer = false;' % member.name)
+    strlist.append('    ros_message->%s.is_rosidl_buffer = false;' % member.name)
     strlist.append('  }')
     strlist.append('  std::vector<uint8_t> vec;')
     strlist.append('  cdr >> vec;')
@@ -391,7 +391,7 @@ def generate_member_for_cdr_deserialize(member):
     strlist.append('  for (size_t i = 0; i < size; ++i) {')
     strlist.append('    array_ptr[i] = vec[i];')
     strlist.append('  }')
-    strlist.append('  ros_message->%s.is_rcl_buffer = false;' % member.name)
+    strlist.append('  ros_message->%s.is_rosidl_buffer = false;' % member.name)
   elif isinstance(member.type, AbstractNestedType):
     if isinstance(member.type, Array):
       strlist.append('  size_t size = %d;' % (member.type.size))
@@ -973,7 +973,7 @@ static size_t _@(message.structure.namespaced_type.name)__max_serialized_size(ch
 @[if has_buffer_fields]@
 // Endpoint-aware serialization for C messages with Buffer fields.
 // Uses the same per-field serialization as the regular path, but for uint8[] fields
-// checks the is_rcl_buffer flag to detect rcl_buffer::Buffer<uint8_t>*.
+// checks the is_rosidl_buffer flag to detect rosidl::Buffer<uint8_t>*.
 static bool _@(message.structure.namespaced_type.name)__cdr_serialize_with_endpoint(
   const void * untyped_ros_message,
   eprosima::fastcdr::Cdr & cdr,
@@ -990,8 +990,8 @@ static bool _@(message.structure.namespaced_type.name)__cdr_serialize_with_endpo
 @[    if isinstance(member.type, UnboundedSequence) and isinstance(member.type.value_type, BasicType) and member.type.value_type.typename == 'uint8']@
   // Field name: @(member.name) (buffer-aware)
   {
-    if (ros_message->@(member.name).is_rcl_buffer) {
-      auto * buffer = reinterpret_cast<const rcl_buffer::Buffer<uint8_t> *>(
+    if (ros_message->@(member.name).is_rosidl_buffer) {
+      auto * buffer = reinterpret_cast<const rosidl::Buffer<uint8_t> *>(
         ros_message->@(member.name).data);
       rosidl_typesupport_fastrtps_cpp::serialize_buffer_with_endpoint(
         cdr, *buffer, endpoint_info);
@@ -1017,8 +1017,8 @@ static bool _@(message.structure.namespaced_type.name)__cdr_serialize_with_endpo
 }
 
 // Endpoint-aware deserialization for C messages with Buffer fields.
-// For vendor-backed buffer data, creates a heap-allocated rcl_buffer::Buffer<uint8_t>
-// and sets is_rcl_buffer on the C sequence struct.
+// For vendor-backed buffer data, creates a heap-allocated rosidl::Buffer<uint8_t>
+// and sets is_rosidl_buffer on the C sequence struct.
 static bool _@(message.structure.namespaced_type.name)__cdr_deserialize_with_endpoint(
   eprosima::fastcdr::Cdr & cdr,
   void * untyped_ros_message,
@@ -1035,8 +1035,8 @@ static bool _@(message.structure.namespaced_type.name)__cdr_deserialize_with_end
 @[    if isinstance(member.type, UnboundedSequence) and isinstance(member.type.value_type, BasicType) and member.type.value_type.typename == 'uint8']@
   // Field name: @(member.name) (buffer-aware)
   {
-    // Deserialize into a temporary Buffer, then decide: is_rcl_buffer or copy
-    auto * buffer = new rcl_buffer::Buffer<uint8_t>();
+    // Deserialize into a temporary Buffer, then decide: is_rosidl_buffer or copy
+    auto * buffer = new rosidl::Buffer<uint8_t>();
     try {
       rosidl_typesupport_fastrtps_cpp::deserialize_buffer_with_endpoint(
         cdr, *buffer, endpoint_info);
@@ -1050,7 +1050,7 @@ static bool _@(message.structure.namespaced_type.name)__cdr_deserialize_with_end
       ros_message->@(member.name).data = reinterpret_cast<uint8_t *>(buffer);
       ros_message->@(member.name).size = buffer->size();
       ros_message->@(member.name).capacity = 0;
-      ros_message->@(member.name).is_rcl_buffer = true;
+      ros_message->@(member.name).is_rosidl_buffer = true;
     } else {
       // CPU backend: copy into normal sequence (backward compatible)
       size_t buf_size = buffer->size();

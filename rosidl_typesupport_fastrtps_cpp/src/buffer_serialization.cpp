@@ -23,21 +23,21 @@ namespace fastcdr
 {
 
 // Explicit instantiation for Buffer<uint8_t> (most common case for image data, etc.)
-template void serialize<rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>>>(
+template void serialize<rosidl::Buffer<uint8_t, std::allocator<uint8_t>>>(
   Cdr & cdr,
-  const rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
+  const rosidl::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
 
-template void deserialize<rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>>>(
+template void deserialize<rosidl::Buffer<uint8_t, std::allocator<uint8_t>>>(
   Cdr & cdr,
-  rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
+  rosidl::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
 
-template Cdr & operator<<<rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>>>(
+template Cdr & operator<<<rosidl::Buffer<uint8_t, std::allocator<uint8_t>>>(
   Cdr & cdr,
-  const rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
+  const rosidl::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
 
-template Cdr & operator>><rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>>>(
+template Cdr & operator>><rosidl::Buffer<uint8_t, std::allocator<uint8_t>>>(
   Cdr & cdr,
-  rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
+  rosidl::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
 
 }  // namespace fastcdr
 }  // namespace eprosima

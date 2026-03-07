@@ -23,35 +23,35 @@ namespace fastcdr
 {
 
 // Common numeric types - explicit instantiations with explicit allocator
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<uint8_t, std::allocator<uint8_t>> & buffer);
 
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<int8_t, std::allocator<int8_t>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<int8_t, std::allocator<int8_t>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<int8_t, std::allocator<int8_t>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<int8_t, std::allocator<int8_t>> & buffer);
 
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<uint16_t, std::allocator<uint16_t>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<uint16_t, std::allocator<uint16_t>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<uint16_t, std::allocator<uint16_t>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<uint16_t, std::allocator<uint16_t>> & buffer);
 
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<int16_t, std::allocator<int16_t>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<int16_t, std::allocator<int16_t>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<int16_t, std::allocator<int16_t>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<int16_t, std::allocator<int16_t>> & buffer);
 
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<uint32_t, std::allocator<uint32_t>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<uint32_t, std::allocator<uint32_t>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<uint32_t, std::allocator<uint32_t>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<uint32_t, std::allocator<uint32_t>> & buffer);
 
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<int32_t, std::allocator<int32_t>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<int32_t, std::allocator<int32_t>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<int32_t, std::allocator<int32_t>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<int32_t, std::allocator<int32_t>> & buffer);
 
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<uint64_t, std::allocator<uint64_t>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<uint64_t, std::allocator<uint64_t>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<uint64_t, std::allocator<uint64_t>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<uint64_t, std::allocator<uint64_t>> & buffer);
 
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<int64_t, std::allocator<int64_t>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<int64_t, std::allocator<int64_t>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<int64_t, std::allocator<int64_t>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<int64_t, std::allocator<int64_t>> & buffer);
 
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<float, std::allocator<float>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<float, std::allocator<float>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<float, std::allocator<float>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<float, std::allocator<float>> & buffer);
 
-template void serialize(Cdr & cdr, const rcl_buffer::Buffer<double, std::allocator<double>> & buffer);
-template void deserialize(Cdr & cdr, rcl_buffer::Buffer<double, std::allocator<double>> & buffer);
+template void serialize(Cdr & cdr, const rosidl::Buffer<double, std::allocator<double>> & buffer);
+template void deserialize(Cdr & cdr, rosidl::Buffer<double, std::allocator<double>> & buffer);
 
 }  // namespace fastcdr
 }  // namespace eprosima

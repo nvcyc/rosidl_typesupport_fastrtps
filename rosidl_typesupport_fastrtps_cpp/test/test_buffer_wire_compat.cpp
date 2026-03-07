@@ -8,7 +8,7 @@
 
 #include "fastcdr/Cdr.h"
 #include "fastcdr/FastBuffer.h"
-#include "rcl_buffer/buffer.hpp"
+#include "rosidl_buffer/buffer.hpp"
 #include "rmw/topic_endpoint_info.h"
 #include "rosidl_typesupport_fastrtps_cpp/buffer_serialization.hpp"
 
@@ -34,7 +34,7 @@ TEST(BufferWireCompat, CpuBufferSerializationMatchesLegacyVectorBytes)
 {
   const std::vector<uint8_t> payload{1, 2, 3, 4, 5, 6, 7, 8};
 
-  rcl_buffer::Buffer<uint8_t> buffer;
+  rosidl::Buffer<uint8_t> buffer;
   buffer.resize(payload.size());
   for (size_t i = 0; i < payload.size(); ++i) {
     buffer[i] = payload[i];
@@ -67,7 +67,7 @@ TEST(BufferWireCompat, DeserializeLegacyVectorBytesIntoCpuBuffer)
   eprosima::fastcdr::FastBuffer fast_buffer(
     reinterpret_cast<char *>(bytes.data()), bytes.size());
   eprosima::fastcdr::Cdr cdr(fast_buffer);
-  rcl_buffer::Buffer<uint8_t> output;
+  rosidl::Buffer<uint8_t> output;
   const auto endpoint_info = rmw_get_zero_initialized_topic_endpoint_info();
 
   rosidl_typesupport_fastrtps_cpp::deserialize_buffer_with_endpoint(cdr, output, endpoint_info);
@@ -89,7 +89,7 @@ TEST(BufferWireCompat, DescriptorMarkerIsNotInterpretedAsLegacyVector)
   eprosima::fastcdr::FastBuffer fast_buffer(
     reinterpret_cast<char *>(bytes.data()), bytes.size());
   eprosima::fastcdr::Cdr cdr(fast_buffer);
-  rcl_buffer::Buffer<uint8_t> output;
+  rosidl::Buffer<uint8_t> output;
   const auto endpoint_info = rmw_get_zero_initialized_topic_endpoint_info();
 
   try {

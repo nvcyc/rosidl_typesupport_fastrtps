@@ -24,7 +24,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "rcl_buffer/buffer.hpp"
+#include "rosidl_buffer/buffer.hpp"
 #include "rosidl_typesupport_fastrtps_cpp/message_type_support.h"
 #include "rosidl_typesupport_fastrtps_cpp/message_type_support_decl.hpp"
 #include "rosidl_typesupport_fastrtps_cpp/visibility_control.h"
@@ -132,7 +132,7 @@ inline void register_descriptor_serializers(const std::string & backend_name)
 /// Get serialized size of Buffer<T> - for use by generated type support code
 template<typename T, typename Allocator>
 inline size_t get_buffer_serialized_size(
-  const rcl_buffer::Buffer<T, Allocator> & buffer,
+  const rosidl::Buffer<T, Allocator> & buffer,
   size_t current_alignment)
 {
   size_t initial_alignment = current_alignment;
@@ -185,7 +185,7 @@ inline size_t get_buffer_serialized_size(
 template<typename T, typename Allocator>
 inline void serialize_buffer_with_endpoint(
   eprosima::fastcdr::Cdr & cdr,
-  const rcl_buffer::Buffer<T, Allocator> & buffer,
+  const rosidl::Buffer<T, Allocator> & buffer,
   const rmw_topic_endpoint_info_t & endpoint_info)
 {
   const std::string backend_type = buffer.get_backend_type();
@@ -219,7 +219,7 @@ inline void serialize_buffer_with_endpoint(
       "FastCDR serializers not registered for backend: " + backend_type);
   }
 
-  auto * non_const_impl = const_cast<rcl_buffer::BufferImplBase<T> *>(impl);
+  auto * non_const_impl = const_cast<rosidl::BufferImplBase<T> *>(impl);
   std::shared_ptr<void> impl_shared(static_cast<void *>(non_const_impl), [](void *){});
 
   auto descriptor = ops_it->second.create_descriptor_with_endpoint(impl_shared, endpoint_info);
@@ -251,7 +251,7 @@ inline void serialize_buffer_with_endpoint(
 template<typename T, typename Allocator>
 inline void deserialize_buffer_with_endpoint(
   eprosima::fastcdr::Cdr & cdr,
-  rcl_buffer::Buffer<T, Allocator> & buffer,
+  rosidl::Buffer<T, Allocator> & buffer,
   const rmw_topic_endpoint_info_t & endpoint_info)
 {
   RCUTILS_LOG_INFO_NAMED( "deserialize_buffer_with_endpoint", "Starting buffer deserialization");
@@ -340,8 +340,8 @@ inline void deserialize_buffer_with_endpoint(
 
   // Wrap implementation in Buffer
   auto typed_impl_shared =
-    std::static_pointer_cast<rcl_buffer::BufferImplBase<T>>(impl_shared);
-  std::unique_ptr<rcl_buffer::BufferImplBase<T>> typed_impl_unique =
+    std::static_pointer_cast<rosidl::BufferImplBase<T>>(impl_shared);
+  std::unique_ptr<rosidl::BufferImplBase<T>> typed_impl_unique =
     typed_impl_shared->clone();
   buffer.set_impl(std::move(typed_impl_unique), backend_type);
 }
@@ -355,14 +355,14 @@ namespace fastcdr
 
 /// FastCDR serialize() function for Buffer<T> (called by FastCDR internally)
 template<typename T, typename Allocator>
-inline void serialize(Cdr & cdr, const rcl_buffer::Buffer<T, Allocator> & buffer)
+inline void serialize(Cdr & cdr, const rosidl::Buffer<T, Allocator> & buffer)
 {
   cdr << buffer;  // Delegate to our custom operator<<
 }
 
 /// FastCDR deserialize() function for Buffer<T> (called by FastCDR internally)
 template<typename T, typename Allocator>
-inline void deserialize(Cdr & cdr, rcl_buffer::Buffer<T, Allocator> & buffer)
+inline void deserialize(Cdr & cdr, rosidl::Buffer<T, Allocator> & buffer)
 {
   cdr >> buffer;  // Delegate to our custom operator>>
 }
@@ -371,7 +371,7 @@ inline void deserialize(Cdr & cdr, rcl_buffer::Buffer<T, Allocator> & buffer)
 /// CPU backend: serializes directly as std::vector<T>
 /// Other backends: force-convert to CPU backend and serialize as std::vector<T>
 template<typename T, typename Allocator>
-inline Cdr & operator<<(Cdr & cdr, const rcl_buffer::Buffer<T, Allocator> & buffer)
+inline Cdr & operator<<(Cdr & cdr, const rosidl::Buffer<T, Allocator> & buffer)
 {
   const std::string backend_type = buffer.get_backend_type();
   if (backend_type != "cpu") {
@@ -389,7 +389,7 @@ inline Cdr & operator<<(Cdr & cdr, const rcl_buffer::Buffer<T, Allocator> & buff
 /// CPU backend: deserializes directly from std::vector<T> (fully backward compatible)
 /// Other backends: use descriptor message approach
 template<typename T, typename Allocator>
-inline Cdr & operator>>(Cdr & cdr, rcl_buffer::Buffer<T, Allocator> & buffer)
+inline Cdr & operator>>(Cdr & cdr, rosidl::Buffer<T, Allocator> & buffer)
 {
   // Only supports legacy vector-compatible CPU path.
   auto original_state = cdr.get_state();
