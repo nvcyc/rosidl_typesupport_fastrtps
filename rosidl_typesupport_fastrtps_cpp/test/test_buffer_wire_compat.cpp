@@ -83,7 +83,6 @@ TEST(BufferWireCompat, DescriptorMarkerIsNotInterpretedAsLegacyVector)
       cdr << static_cast<uint32_t>(rosidl_typesupport_fastrtps_cpp::kBufferDescriptorMarker);
       cdr << std::string("demo");
       cdr << std::string(typeid(uint8_t).name());
-      cdr << std::string("demo_buffer_backend_msgs::msg::DemoBufferDescriptor");
     });
 
   eprosima::fastcdr::FastBuffer fast_buffer(

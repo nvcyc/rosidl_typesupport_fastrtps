@@ -48,8 +48,6 @@ struct BackendDescriptorOps
   // Create buffer impl from descriptor with endpoint awareness
   std::function<std::shared_ptr<void>(const std::shared_ptr<void> &,
     const rmw_topic_endpoint_info_t &)> from_descriptor_with_endpoint;
-  // Descriptor type name (e.g., "cuda_buffer_msgs::msg::CudaBufferDescriptor")
-  std::string descriptor_type_name;
 };
 
 /// FastCDR-specific descriptor serialization functions (technology-specific)
@@ -167,11 +165,10 @@ inline size_t get_buffer_serialized_size(
       eprosima::fastcdr::Cdr::alignment(current_alignment, padding) +
       backend_type.size() + 1;  // +1 for null terminator
 
-    // Vendor backends: account for element_type_id, descriptor_type_name, and descriptor
-    // The descriptor includes metadata PLUS the serialized buffer data
+    // Vendor backends: account for element_type_id and descriptor
     // Conservative estimate: buffer data size + overhead for metadata fields
     size_t buffer_data_size = buffer.size() * sizeof(T);
-    size_t metadata_overhead = 512;  // Strings, integers, bool, etc.
+    size_t metadata_overhead = 256;
     current_alignment += buffer_data_size + metadata_overhead;
   }
 
@@ -241,9 +238,8 @@ inline void serialize_buffer_with_endpoint(
   cdr << element_type_id;
 
   RCUTILS_LOG_INFO_NAMED("serialize_buffer_with_endpoint",
-    ("Serializing descriptor (type name: " + ops_it->second.descriptor_type_name + ")").c_str());
+    ("Serializing descriptor for backend: " + backend_type).c_str());
 
-  cdr << ops_it->second.descriptor_type_name;
   ser_it->second.serialize(cdr, descriptor);
 }
 
@@ -298,14 +294,11 @@ inline void deserialize_buffer_with_endpoint(
 
   std::string backend_type;
   std::string element_type_id;
-  std::string descriptor_type_name;
 
   cdr >> backend_type;
   cdr >> element_type_id;
-  cdr >> descriptor_type_name;
   RCUTILS_LOG_INFO_NAMED("deserialize_buffer_with_endpoint",
-    (backend_type + " backend: deserializing element_type_id: '" + element_type_id +
-     "', descriptor_type_name: '" + descriptor_type_name + "'").c_str());
+    (backend_type + " backend: deserializing element_type_id: '" + element_type_id + "'").c_str());
 
   // Validate element type
   if (element_type_id != typeid(T).name()) {
