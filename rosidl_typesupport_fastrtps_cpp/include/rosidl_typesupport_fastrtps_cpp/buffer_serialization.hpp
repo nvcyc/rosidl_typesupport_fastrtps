@@ -75,11 +75,11 @@ inline std::unordered_map<std::string, DescriptorSerializers> & get_descriptor_s
   return serializers;
 }
 
-/// Marker format for descriptor-backed Buffer payloads:
-/// - CPU/legacy vector path starts with plain sequence length (high bit clear).
-/// - Descriptor path starts with a marker whose high bit is set.
-inline constexpr uint32_t kBufferDescriptorMarkerMask = 0x80000000u;
-inline constexpr uint32_t kBufferDescriptorMarker = 0x8000B001u;
+/// Marker for descriptor-backed Buffer payloads.
+/// CPU/legacy vector path: first uint32 is the sequence length (any value != marker).
+/// Descriptor path: first uint32 == kBufferDescriptorMarker, followed by backend_type
+/// string and the serialized descriptor.
+inline constexpr uint32_t kBufferDescriptorMarker = 0xFFFFFFFFu;
 
 /// Register FastCDR serialization functions for a buffer descriptor message type.
 ///
@@ -165,7 +165,7 @@ inline size_t get_buffer_serialized_size(
       eprosima::fastcdr::Cdr::alignment(current_alignment, padding) +
       backend_type.size() + 1;  // +1 for null terminator
 
-    // Vendor backends: account for element_type_id and descriptor
+    // Vendor backends: account for descriptor payload
     // Conservative estimate: buffer data size + overhead for metadata fields
     size_t buffer_data_size = buffer.size() * sizeof(T);
     size_t metadata_overhead = 256;
@@ -230,12 +230,9 @@ inline void serialize_buffer_with_endpoint(
     return;
   }
 
-  // Descriptor-backed payload marker in first uint32 (high-bit set).
+  // Descriptor-backed payload marker in first uint32.
   cdr << static_cast<uint32_t>(kBufferDescriptorMarker);
   cdr << backend_type;
-
-  const std::string element_type_id = typeid(T).name();
-  cdr << element_type_id;
 
   RCUTILS_LOG_INFO_NAMED("serialize_buffer_with_endpoint",
     ("Serializing descriptor for backend: " + backend_type).c_str());
@@ -264,8 +261,8 @@ inline void deserialize_buffer_with_endpoint(
   }
   cdr.set_state(original_state);
 
-  // Legacy/vector path: no marker in first word (high-bit clear).
-  if ((first_word & kBufferDescriptorMarkerMask) == 0u) {
+  // Legacy/vector path: first word is a sequence length (any value != marker).
+  if (first_word != kBufferDescriptorMarker) {
     RCUTILS_LOG_INFO_NAMED(
       "deserialize_buffer_with_endpoint", "Legacy vector path: deserializing std::vector");
     std::vector<T> vec;
@@ -283,29 +280,13 @@ inline void deserialize_buffer_with_endpoint(
     return;
   }
 
-  // Descriptor path: marker is present in first uint32.
-  if (first_word != kBufferDescriptorMarker) {
-    throw std::runtime_error(
-            "Unknown Buffer descriptor marker: " + std::to_string(first_word));
-  }
-
-  // Consume marker now that it has been validated.
+  // Descriptor path: consume the marker.
   cdr >> first_word;
 
   std::string backend_type;
-  std::string element_type_id;
-
   cdr >> backend_type;
-  cdr >> element_type_id;
   RCUTILS_LOG_INFO_NAMED("deserialize_buffer_with_endpoint",
-    (backend_type + " backend: deserializing element_type_id: '" + element_type_id + "'").c_str());
-
-  // Validate element type
-  if (element_type_id != typeid(T).name()) {
-    throw std::runtime_error(
-      "Type mismatch during deserialization: expected " +
-      std::string(typeid(T).name()) + ", got " + element_type_id);
-  }
+    (backend_type + " backend: deserializing descriptor").c_str());
 
   // Get backend descriptor operations
   auto & backend_ops = get_backend_descriptor_ops();
@@ -389,7 +370,7 @@ inline Cdr & operator>>(Cdr & cdr, rosidl::Buffer<T, Allocator> & buffer)
   uint32_t first_word = 0u;
   cdr >> first_word;
   cdr.set_state(original_state);
-  if ((first_word & rosidl_typesupport_fastrtps_cpp::kBufferDescriptorMarkerMask) != 0u) {
+  if (first_word == rosidl_typesupport_fastrtps_cpp::kBufferDescriptorMarker) {
     throw std::runtime_error(
             "Deserializing Buffer<T> with operator>> only supports legacy CPU vector bytes");
   }
