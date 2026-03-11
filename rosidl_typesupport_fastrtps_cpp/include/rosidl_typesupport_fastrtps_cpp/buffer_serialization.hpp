@@ -53,8 +53,10 @@ struct BackendDescriptorOps
 /// FastCDR-specific descriptor serialization functions (technology-specific)
 struct DescriptorSerializers
 {
-  std::function<void(eprosima::fastcdr::Cdr &, const std::shared_ptr<void> &)> serialize;
-  std::function<std::shared_ptr<void>(eprosima::fastcdr::Cdr &)> deserialize;
+  std::function<void(eprosima::fastcdr::Cdr &, const std::shared_ptr<void> &,
+    const rmw_topic_endpoint_info_t &)> serialize;
+  std::function<std::shared_ptr<void>(eprosima::fastcdr::Cdr &,
+    const rmw_topic_endpoint_info_t &)> deserialize;
 };
 
 /// Get global map of backend descriptor operations
@@ -110,16 +112,26 @@ inline void register_descriptor_serializers(const std::string & backend_name)
 
   desc_ser.serialize = [callbacks](
     eprosima::fastcdr::Cdr & cdr,
-    const std::shared_ptr<void> & desc_ptr)
+    const std::shared_ptr<void> & desc_ptr,
+    const rmw_topic_endpoint_info_t & endpoint_info)
     {
-      callbacks->cdr_serialize(desc_ptr.get(), cdr);
+      if (callbacks->cdr_serialize_with_endpoint) {
+        callbacks->cdr_serialize_with_endpoint(desc_ptr.get(), cdr, endpoint_info);
+      } else {
+        callbacks->cdr_serialize(desc_ptr.get(), cdr);
+      }
     };
 
   desc_ser.deserialize = [callbacks](
-    eprosima::fastcdr::Cdr & cdr) -> std::shared_ptr<void>
+    eprosima::fastcdr::Cdr & cdr,
+    const rmw_topic_endpoint_info_t & endpoint_info) -> std::shared_ptr<void>
     {
       auto desc = std::make_shared<DescriptorMsgT>();
-      callbacks->cdr_deserialize(cdr, desc.get());
+      if (callbacks->cdr_deserialize_with_endpoint) {
+        callbacks->cdr_deserialize_with_endpoint(cdr, desc.get(), endpoint_info);
+      } else {
+        callbacks->cdr_deserialize(cdr, desc.get());
+      }
       return desc;
     };
 
@@ -237,7 +249,7 @@ inline void serialize_buffer_with_endpoint(
   RCUTILS_LOG_INFO_NAMED("serialize_buffer_with_endpoint",
     ("Serializing descriptor for backend: " + backend_type).c_str());
 
-  ser_it->second.serialize(cdr, descriptor);
+  ser_it->second.serialize(cdr, descriptor, endpoint_info);
 }
 
 /// Deserialize Buffer<T> with endpoint awareness.
@@ -306,7 +318,7 @@ inline void deserialize_buffer_with_endpoint(
 
   // Deserialize descriptor
   RCUTILS_LOG_INFO_NAMED( "deserialize_buffer_with_endpoint", "Deserializing descriptor");
-  auto descriptor = ser_it->second.deserialize(cdr);
+  auto descriptor = ser_it->second.deserialize(cdr, endpoint_info);
 
   // Create buffer implementation with endpoint awareness
   RCUTILS_LOG_INFO_NAMED( "deserialize_buffer_with_endpoint", "Creating buffer from descriptor");
