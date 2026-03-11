@@ -136,16 +136,23 @@ def generate_member_for_cdr_serialize(member, suffix, endpoint_param=''):
   strlist = []
   strlist.append('// Member: %s' % (member.name))
   
-  # Handle endpoint-aware serialization for Buffer fields (only uint8[] UnboundedSequence -> Buffer<T>)
-  if suffix == '_with_endpoint' and isinstance(member.type, UnboundedSequence):
-    # Only uint8[] arrays use Buffer - check if this is a uint8 sequence
+  # Handle serialization for Buffer fields (only uint8[] UnboundedSequence -> Buffer<T>)
+  if isinstance(member.type, UnboundedSequence):
     if isinstance(member.type.value_type, BasicType) and member.type.value_type.typename == 'uint8':
-      # Buffer fields use endpoint-aware serialization
-      strlist.append('{')
-      strlist.append('  rosidl_typesupport_fastrtps_cpp::serialize_buffer_with_endpoint(')
-      strlist.append('    cdr, ros_message.%s, %s);' % (member.name, endpoint_param))
-      strlist.append('}')
-      return strlist
+      if suffix == '_with_endpoint':
+        # Endpoint-aware serialization with backend descriptors
+        strlist.append('{')
+        strlist.append('  rosidl_typesupport_fastrtps_cpp::serialize_buffer_with_endpoint(')
+        strlist.append('    cdr, ros_message.%s, %s);' % (member.name, endpoint_param))
+        strlist.append('}')
+        return strlist
+      else:
+        # Regular CDR: use to_vector() which works for all backends (CPU, demo, etc.)
+        strlist.append('{')
+        strlist.append('  std::vector<%s> vec = ros_message.%s.to_vector();' % (msg_type_only_to_cpp(member.type.value_type), member.name))
+        strlist.append('  cdr << vec;')
+        strlist.append('}')
+        return strlist
   
   nested_msg_suffix = '' if suffix == '_with_endpoint' else suffix
   if isinstance(member.type, AbstractNestedType):

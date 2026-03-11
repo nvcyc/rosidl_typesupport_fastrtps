@@ -568,8 +568,33 @@ def generate_member_for_get_serialized_size(member, suffix):
   from rosidl_parser.definition import BasicType
   from rosidl_parser.definition import BoundedSequence
   from rosidl_parser.definition import NamespacedType
+  from rosidl_parser.definition import UnboundedSequence
   strlist = []
   strlist.append('// Field name: %s' % (member.name))
+
+  # For uint8[] UnboundedSequence (Buffer<uint8_t>), handle is_rosidl_buffer
+  # where ros_message->field.size may be 0 but the actual Buffer has data.
+  if (
+    suffix == '' and
+    isinstance(member.type, UnboundedSequence) and
+    isinstance(member.type.value_type, BasicType) and
+    member.type.value_type.typename == 'uint8'
+  ):
+    strlist.append('{')
+    strlist.append('  size_t array_size;')
+    strlist.append('  if (ros_message->%s.is_rosidl_buffer) {' % member.name)
+    strlist.append('    auto * buffer = reinterpret_cast<const rosidl::Buffer<uint8_t> *>(ros_message->%s.data);' % member.name)
+    strlist.append('    array_size = (buffer != nullptr) ? buffer->size() : 0;')
+    strlist.append('  } else {')
+    strlist.append('    array_size = ros_message->%s.size;' % member.name)
+    strlist.append('  }')
+    strlist.append('  current_alignment += padding +')
+    strlist.append('    eprosima::fastcdr::Cdr::alignment(current_alignment, padding);')
+    strlist.append('  current_alignment += array_size * sizeof(uint8_t) +')
+    strlist.append('    eprosima::fastcdr::Cdr::alignment(current_alignment, sizeof(uint8_t));')
+    strlist.append('}')
+    return strlist
+
   if isinstance(member.type, AbstractNestedType):
     strlist.append('{')
     if isinstance(member.type, Array):
