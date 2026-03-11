@@ -39,8 +39,7 @@ ament_export_dependencies(fastcdr)
 ament_python_install_package(${PROJECT_NAME})
 
 add_library(${PROJECT_NAME}
-  src/identifier.cpp
-  src/buffer_serialization_instantiations.cpp)
+  src/identifier.cpp)
 set_property(TARGET ${PROJECT_NAME}
   PROPERTY DEFINE_SYMBOL "ROSIDL_TYPESUPPORT_FASTRTPS_CPP_BUILDING_DLL")
 target_include_directories(${PROJECT_NAME} PUBLIC
