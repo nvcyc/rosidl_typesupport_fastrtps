@@ -24,7 +24,6 @@ header_files = [
     'rosidl_typesupport_fastrtps_cpp/message_type_support.h',
     'rosidl_typesupport_fastrtps_cpp/message_type_support_decl.hpp',
     'rosidl_typesupport_fastrtps_cpp/serialization_helpers.hpp',
-    'rosidl_typesupport_fastrtps_cpp/buffer_serialization.hpp',
     'fastcdr/Cdr.h',
 ]
 
@@ -36,6 +35,9 @@ for member in message.structure.members:
         if isinstance(member.type.value_type, BasicType) and member.type.value_type.typename == 'uint8':
             has_buffer_fields = True
             break
+
+if has_buffer_fields:
+    header_files.append('rosidl_typesupport_fastrtps_cpp/buffer_serialization.hpp')
 }@
 @[for header_file in header_files]@
 @[    if header_file in include_directives]@
