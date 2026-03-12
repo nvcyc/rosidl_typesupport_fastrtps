@@ -324,12 +324,11 @@ inline void deserialize_buffer_with_endpoint(
   RCUTILS_LOG_INFO_NAMED( "deserialize_buffer_with_endpoint", "Creating buffer from descriptor");
   auto impl_shared = ops_it->second.from_descriptor_with_endpoint(descriptor, endpoint_info);
 
-  // Wrap implementation in Buffer
   auto typed_impl_shared =
     std::static_pointer_cast<rosidl::BufferImplBase<T>>(impl_shared);
   std::unique_ptr<rosidl::BufferImplBase<T>> typed_impl_unique =
     typed_impl_shared->clone();
-  buffer.set_impl(std::move(typed_impl_unique), backend_type);
+  buffer = rosidl::Buffer<T, Allocator>(std::move(typed_impl_unique));
 }
 
 }  // namespace rosidl_typesupport_fastrtps_cpp
