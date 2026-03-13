@@ -62,20 +62,12 @@ struct DescriptorSerializers
 /// Get global map of backend descriptor operations
 /// RMW layer populates this during backend initialization
 ROSIDL_TYPESUPPORT_FASTRTPS_CPP_PUBLIC
-inline std::unordered_map<std::string, BackendDescriptorOps> & get_backend_descriptor_ops()
-{
-  static std::unordered_map<std::string, BackendDescriptorOps> ops;
-  return ops;
-}
+std::unordered_map<std::string, BackendDescriptorOps> & get_backend_descriptor_ops();
 
 /// Get global map of FastCDR descriptor serializers
 /// RMW layer populates this by calling backend registration functions
 ROSIDL_TYPESUPPORT_FASTRTPS_CPP_PUBLIC
-inline std::unordered_map<std::string, DescriptorSerializers> & get_descriptor_serializers()
-{
-  static std::unordered_map<std::string, DescriptorSerializers> serializers;
-  return serializers;
-}
+std::unordered_map<std::string, DescriptorSerializers> & get_descriptor_serializers();
 
 /// Marker for descriptor-backed Buffer payloads.
 /// CPU/legacy vector path: first uint32 is the sequence length (any value != marker).
