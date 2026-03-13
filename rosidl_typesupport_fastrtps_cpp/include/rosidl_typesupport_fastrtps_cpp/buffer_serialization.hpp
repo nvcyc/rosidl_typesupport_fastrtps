@@ -22,6 +22,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "rosidl_buffer/buffer.hpp"
@@ -251,7 +252,7 @@ inline void deserialize_buffer_with_endpoint(
   rosidl::Buffer<T, Allocator> & buffer,
   const rmw_topic_endpoint_info_t & endpoint_info)
 {
-  RCUTILS_LOG_INFO_NAMED( "deserialize_buffer_with_endpoint", "Starting buffer deserialization");
+  RCUTILS_LOG_INFO_NAMED("deserialize_buffer_with_endpoint", "Starting buffer deserialization");
 
   // Peek first uint32 to disambiguate legacy vector bytes vs descriptor payload.
   auto original_state = cdr.get_state();
@@ -309,11 +310,11 @@ inline void deserialize_buffer_with_endpoint(
   }
 
   // Deserialize descriptor
-  RCUTILS_LOG_INFO_NAMED( "deserialize_buffer_with_endpoint", "Deserializing descriptor");
+  RCUTILS_LOG_INFO_NAMED("deserialize_buffer_with_endpoint", "Deserializing descriptor");
   auto descriptor = ser_it->second.deserialize(cdr, endpoint_info);
 
   // Create buffer implementation with endpoint awareness
-  RCUTILS_LOG_INFO_NAMED( "deserialize_buffer_with_endpoint", "Creating buffer from descriptor");
+  RCUTILS_LOG_INFO_NAMED("deserialize_buffer_with_endpoint", "Creating buffer from descriptor");
   auto impl_shared = ops_it->second.from_descriptor_with_endpoint(descriptor, endpoint_info);
 
   auto typed_impl_shared =
