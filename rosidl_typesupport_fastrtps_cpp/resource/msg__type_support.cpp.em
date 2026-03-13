@@ -476,7 +476,6 @@ cdr_deserialize_with_endpoint(
   return true;
 }
 @[end if]@
-
 @{
 
 # Generates the definition for the get_serialized_size family of methods given a structure member

@@ -543,7 +543,11 @@ bool cdr_deserialize_@('__'.join([package_name] + list(interface_path.parents[0]
 {
 @[for member in message.structure.members]@
 @[  for line in generate_member_for_cdr_deserialize(member)]@
+@[    if line]@
   @(line)
+@[    else]@
+
+@[    end if]@
 @[  end for]@
 
 @[end for]@
@@ -1093,7 +1097,11 @@ static bool _@(message.structure.namespaced_type.name)__cdr_deserialize_with_end
 @[    else]@
   // Field name: @(member.name)
 @[    for line in generate_member_for_cdr_deserialize(member)]@
+@[      if line]@
   @(line)
+@[      else]@
+
+@[      end if]@
 @[    end for]@
 @[    end if]@
 
@@ -1101,7 +1109,6 @@ static bool _@(message.structure.namespaced_type.name)__cdr_deserialize_with_end
   return true;
 }
 @[end if]@
-
 @# // Collect the callback functions and provide a function to get the type support struct.
 
 static message_type_support_callbacks_t __callbacks_@(message.structure.namespaced_type.name) = {
