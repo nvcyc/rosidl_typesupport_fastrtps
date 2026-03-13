@@ -41,7 +41,7 @@ namespace rosidl_typesupport_fastrtps_cpp
 /// This keeps rosidl_typesupport_fastrtps_cpp free of pluginlib/registry dependencies
 
 /// Backend descriptor operations (technology-independent, provided by backend)
-struct BackendDescriptorOps
+struct BufferDescriptorOps
 {
   // Create descriptor with endpoint awareness
   std::function<std::shared_ptr<void>(const std::shared_ptr<void> &,
@@ -63,7 +63,7 @@ struct DescriptorSerializers
 /// Get global map of backend descriptor operations
 /// RMW layer populates this during backend initialization
 ROSIDL_TYPESUPPORT_FASTRTPS_CPP_PUBLIC
-std::unordered_map<std::string, BackendDescriptorOps> & get_backend_descriptor_ops();
+std::unordered_map<std::string, BufferDescriptorOps> & get_backend_descriptor_ops();
 
 /// Get global map of FastCDR descriptor serializers
 /// RMW layer populates this by calling backend registration functions
@@ -75,62 +75,6 @@ std::unordered_map<std::string, DescriptorSerializers> & get_descriptor_serializ
 /// Descriptor path: first uint32 == kBufferDescriptorMarker, followed by backend_type
 /// string and the serialized descriptor.
 inline constexpr uint32_t kBufferDescriptorMarker = 0xFFFFFFFFu;
-
-/// Register FastCDR serialization functions for a buffer descriptor message type.
-///
-/// This leverages the existing rosidl-generated type support callbacks
-/// (cdr_serialize/cdr_deserialize via message_type_support_callbacks_t) so that
-/// backend vendors do not need to manually write registration code or build
-/// separate registration libraries.
-///
-/// Backend implementations should call this once during construction:
-///   rosidl_typesupport_fastrtps_cpp::register_descriptor_serializers<
-///     my_backend_msgs::msg::MyDescriptor>("my_backend");
-///
-/// @tparam DescriptorMsgT  The rosidl-generated descriptor message type
-///                          (e.g., demo_buffer_backend_msgs::msg::DemoBufferDescriptor).
-/// @param backend_name      The backend type name used as the registry key
-///                          (e.g., "demo", "cuda").
-template<typename DescriptorMsgT>
-inline void register_descriptor_serializers(const std::string & backend_name)
-{
-  // Obtain the generated FastRTPS type support handle for the descriptor message.
-  // This handle contains type-erased cdr_serialize / cdr_deserialize callbacks.
-  const auto * ts_handle =
-    rosidl_typesupport_fastrtps_cpp::get_message_type_support_handle<DescriptorMsgT>();
-  const auto * callbacks =
-    static_cast<const message_type_support_callbacks_t *>(ts_handle->data);
-
-  DescriptorSerializers desc_ser;
-
-  desc_ser.serialize = [callbacks](
-    eprosima::fastcdr::Cdr & cdr,
-    const std::shared_ptr<void> & desc_ptr,
-    const rmw_topic_endpoint_info_t & endpoint_info)
-    {
-      if (callbacks->cdr_serialize_with_endpoint) {
-        callbacks->cdr_serialize_with_endpoint(desc_ptr.get(), cdr, endpoint_info);
-      } else {
-        callbacks->cdr_serialize(desc_ptr.get(), cdr);
-      }
-    };
-
-  desc_ser.deserialize = [callbacks](
-    eprosima::fastcdr::Cdr & cdr,
-    const rmw_topic_endpoint_info_t & endpoint_info) -> std::shared_ptr<void>
-    {
-      auto desc = std::make_shared<DescriptorMsgT>();
-      if (callbacks->cdr_deserialize_with_endpoint) {
-        callbacks->cdr_deserialize_with_endpoint(cdr, desc.get(), endpoint_info);
-      } else {
-        callbacks->cdr_deserialize(cdr, desc.get());
-      }
-      return desc;
-    };
-
-  auto & serializers = get_descriptor_serializers();
-  serializers[backend_name] = desc_ser;
-}
 
 /// Get serialized size of Buffer<T> - for use by generated type support code
 template<typename T, typename Allocator>

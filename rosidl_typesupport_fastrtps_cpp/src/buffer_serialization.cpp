@@ -17,9 +17,9 @@
 namespace rosidl_typesupport_fastrtps_cpp
 {
 
-std::unordered_map<std::string, BackendDescriptorOps> & get_backend_descriptor_ops()
+std::unordered_map<std::string, BufferDescriptorOps> & get_backend_descriptor_ops()
 {
-  static std::unordered_map<std::string, BackendDescriptorOps> ops;
+  static std::unordered_map<std::string, BufferDescriptorOps> ops;
   return ops;
 }
 
